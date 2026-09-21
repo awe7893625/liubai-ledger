@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+   <head>
+  <link rel="manifest" href="/ledger/manifest.webmanifest" />
+  <meta name="theme-color" content="#d85f2b" />
+  <link rel="apple-touch-icon" href="/ledger/icon-192.png" />
+  <link rel="icon" href="/ledger/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+      <meta charset="UTF-8" />
+      <meta
+        name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
+      <title>Ledger</title>
+        <script>
+    // 白畫面救火：舊 PWA 快取載入被刪的舊 chunk 時，強制清 cache 重載一次
+    window.addEventListener('vite:preloadError', () => {
+      if (!sessionStorage.getItem('vite-reloaded')) {
+        sessionStorage.setItem('vite-reload', '1');
+        caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => location.reload());
+      }
+    });
+  </script>
+</head>
+   <body>
+      <div id="root"></div>
+      <script
+        type="module"
+          src="/src/main.tsx"
+        ></script>
+      </body>
+   </html>

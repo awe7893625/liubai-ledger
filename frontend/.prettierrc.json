@@ -1,0 +1,3 @@
+{
+  "content": "export default {\n  plugins: [\n    require('prettier'),\n  ],\n  rules: {\n    \"prettier/prettier\": \"error\",\n  },\n  extends: [\"prettier\"],\n}"
+}

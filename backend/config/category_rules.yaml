@@ -1,0 +1,95 @@
+rules:
+  - category: c_food
+    keywords:
+      - 餐廳
+      - 早餐
+      - 午餐
+      - 晚餐
+      - 咖啡
+      - 便當
+      - 超商
+      - supermarket
+      - restaurant
+      - coffee
+      - food delivery
+  - category: c_transport
+    keywords:
+      - 捷運
+      - 公車
+      - 計程車
+      - 停車
+      - 加油
+      - 高鐵
+      - 火車
+      - taxi
+      - parking
+      - transit
+  - category: c_home
+    keywords:
+      - 房租
+      - 家具
+      - 家電
+      - 修繕
+      - rent
+      - furniture
+      - appliance
+  - category: c_shopping
+    keywords:
+      - 購物
+      - 百貨
+      - 網購
+      - 超市
+      - shopping
+      - marketplace
+      - department store
+  - category: c_fun
+    keywords:
+      - 電影
+      - 遊戲
+      - 訂閱
+      - 串流
+      - movie
+      - game
+      - streaming
+      - subscription
+  - category: c_health
+    keywords:
+      - 藥局
+      - 診所
+      - 醫院
+      - 健身
+      - pharmacy
+      - clinic
+      - gym
+  - category: c_education
+    keywords:
+      - 書店
+      - 課程
+      - 學費
+      - book
+      - course
+      - tuition
+  - category: c_bills
+    keywords:
+      - 電信
+      - 電費
+      - 水費
+      - 瓦斯
+      - 網路費
+      - insurance
+      - utility
+      - telecom
+  - category: c_travel
+    keywords:
+      - 飯店
+      - 機票
+      - 訂房
+      - 旅遊
+      - hotel
+      - flight
+      - travel
+  - category: c_other
+    keywords:
+      - 手續費
+      - 服務費
+      - fee
