@@ -1,14 +1,23 @@
 import { createRoot } from "react-dom/client";
+import { lazy, Suspense } from "react";
+const PublicSite = lazy(() => import("./public/PublicSite"));
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { App } from "./App";
 import "./styles.css";
 
 const container = document.getElementById("root");
 if (container) {
-   const root = createRoot(container);
-   root.render(
-     <BrowserRouter basename={(import.meta.env.VITE_BASE_PATH as string | undefined) || "/"}>
-       <Routes>
+  const root = createRoot(container);
+  root.render(
+    import.meta.env.VITE_PUBLIC_DOCS === "1" ? (
+      <Suspense fallback={<p style={{ padding: 32 }}>載入 Ledger…</p>}>
+        <PublicSite />
+      </Suspense>
+    ) : (
+      <BrowserRouter
+        basename={(import.meta.env.VITE_BASE_PATH as string | undefined) || "/"}
+      >
+        <Routes>
           <Route path="/" element={<App />} />
           <Route path="/dashboard" element={<App />} />
           <Route path="/ledger" element={<App />} />
@@ -21,22 +30,22 @@ if (container) {
           <Route path="/reflect" element={<App />} />
           <Route
             path="*"
-             element={
-               <div
-                  style={{
-                    padding: "2rem",
-                    fontFamily: "sans-serif",
-                    textAlign: "center",
-                  }}
-                >
-                  404 — Not Found
-                    </div>
-                 }
-                />
-          </Routes>
-       </BrowserRouter>
-     );
-   }
-   else {
-     console.error("No #root element found");
-     }
+            element={
+              <div
+                style={{
+                  padding: "2rem",
+                  fontFamily: "sans-serif",
+                  textAlign: "center",
+                }}
+              >
+                404 — Not Found
+              </div>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    ),
+  );
+} else {
+  console.error("No #root element found");
+}
