@@ -805,6 +805,18 @@ function BudgetPage() {
 
 export function App() {
   const pathname = useLocation().pathname;
+  const publicDocs = import.meta.env.VITE_PUBLIC_DOCS === "1";
+
+  if (publicDocs) {
+    return (
+      <div className="public-docs-shell">
+        <main className="public-docs-main">
+          <SetupPage />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <AppNavigation />

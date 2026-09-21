@@ -2,6 +2,10 @@
 
 **留百工作室**開源的 local-first 個人記帳系統。
 
+[線上 Apple Pay 設定指南](https://liubai-ledger.vercel.app) · GitHub 開源專案（就在本頁）
+
+> 覺得有用的話，歡迎到 GitHub 右上角按 **Star**。這能讓更多想做 Apple Pay 自動記帳的人找到這個專案。
+
 FastAPI + SQLite + React，支援手動記帳、預算、分析，以及 iPhone Wallet「交易」自動化把 Apple Pay 消費送回自己的 Ledger。
 
 > 你的資料留在自己的主機與 SQLite。專案不需要銀行網銀帳密，也不內建作者的卡號、交易紀錄、私人網址或 API key。
@@ -24,7 +28,7 @@ FastAPI + SQLite + React，支援手動記帳、預算、分析，以及 iPhone 
 ## 快速啟動
 
 ```bash
-git clone YOUR_REPOSITORY_URL ledger
+git clone <THIS_REPOSITORY_URL> ledger
 cd ledger
 cp .env.example .env
 ```
