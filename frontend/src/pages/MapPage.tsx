@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
 import L from "leaflet";
 import type { Map as LeafletMap } from "leaflet";
@@ -56,16 +56,18 @@ export function MapPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     api
       .listTransactions({ limit: 5000 })
       .then(setTxns)
       .catch(() => pushToast("error", "載入交易失敗"))
       .finally(() => setLoading(false));
-  };
+  }, [pushToast]);
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const geoTxns = useMemo<GeoTxn[]>(() => {
     if (!txns) return [];

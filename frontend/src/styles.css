@@ -3517,6 +3517,27 @@ body {
   box-shadow: 0 10px 24px rgba(49,95,82,.16);
 }
 
+.setup-public-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.setup-public-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .setup-card {
   display: grid;
   gap: 14px;

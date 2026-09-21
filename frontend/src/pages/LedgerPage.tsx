@@ -678,7 +678,6 @@ export function LedgerPage() {
 
   useEffect(() => {
     void fetchRef.current("replace");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, accountId, status]);
 
   const applyPatch = (id: string, next: LedgerTransaction) =>

@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
-import { Check, Copy, ShieldCheck, Smartphone, Wifi } from "lucide-react";
+import { Check, Copy, Github, ShieldCheck, Smartphone, Wifi } from "lucide-react";
+
+const IS_PUBLIC_DOCS = import.meta.env.VITE_PUBLIC_DOCS === "1";
+const GITHUB_URL = (import.meta.env.VITE_GITHUB_URL as string | undefined)?.trim();
 
 function defaultEndpoint(): string {
-  if (typeof window === "undefined") return "https://YOUR-LEDGER.example.com/api/wallet";
+  if (IS_PUBLIC_DOCS || typeof window === "undefined") {
+    return "https://YOUR-LEDGER.example.com/api/wallet";
+  }
   return window.location.origin + "/api/wallet";
 }
 
@@ -45,6 +50,16 @@ export function SetupPage() {
           <p className="section-eyebrow">Apple Pay 自動記帳</p>
           <h1 className="page-title">把 iPhone 交易接到你的 Ledger</h1>
           <p className="page-subtitle">不用銀行帳密。Wallet 交易觸發後，由捷徑把必要欄位 POST 到你自己的 Ledger。</p>
+          {IS_PUBLIC_DOCS ? (
+            <div className="setup-public-actions">
+              <span className="setup-public-badge">留百工作室 · Open Source</span>
+              {GITHUB_URL ? (
+                <a className="secondary-action" href={GITHUB_URL} target="_blank" rel="noreferrer">
+                  <Github size={16} /> GitHub 開源專案 ★
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
