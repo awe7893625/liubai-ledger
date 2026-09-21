@@ -1,8 +1,4 @@
-"""AI 助理端點：圖片／文字 → 結構化記帳欄位。
-
-優先本機 ollama gemma4:12b（:11435 常駐 vision 小線），失敗 fallback
-OpenRouter（key 讀 OPENROUTER_API_KEY env 或 ~/Projects/scratch/.env）。
-"""
+"""Optional receipt parsing through explicitly configured local or cloud AI. Keys are environment-only."""
 from __future__ import annotations
 
 import json

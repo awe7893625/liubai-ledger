@@ -1,13 +1,15 @@
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { App } from "./App";
+import { PublicSite } from "./public-site/PublicSite";
 import "./styles.css";
+import "./public-site/app-theme.css";
 
 const container = document.getElementById("root");
 if (container) {
    const root = createRoot(container);
    root.render(
-     <BrowserRouter basename={(import.meta.env.VITE_BASE_PATH as string | undefined) || "/"}>
+     import.meta.env.VITE_PUBLIC_DOCS === "1" ? <PublicSite /> : <BrowserRouter basename={(import.meta.env.VITE_BASE_PATH as string | undefined) || "/"}>
        <Routes>
           <Route path="/" element={<App />} />
           <Route path="/dashboard" element={<App />} />

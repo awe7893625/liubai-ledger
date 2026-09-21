@@ -21,3 +21,10 @@ logs/
 *.log
 .vscode/
 .idea/
+
+# Isolated local QA and signing artifacts
+.qa/
+.build-shortcuts/
+.vercel/
+.env.*
+!.env.example

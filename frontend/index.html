@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
    <head>
-  <link rel="manifest" href="/ledger/manifest.webmanifest" />
-  <meta name="theme-color" content="#d85f2b" />
-  <link rel="apple-touch-icon" href="/ledger/icon-192.png" />
-  <link rel="icon" href="/ledger/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#F3EFE6" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="icon" href="/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
@@ -13,12 +13,16 @@
         name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover"
         />
-      <title>Ledger</title>
+      <title>Ledger｜留百工作室 — Apple Pay 捷徑自動記帳</title>
+      <meta name="description" content="留百工作室的開源私人記帳系統。查看實際 App 畫面、下載乾淨的 iPhone 記帳捷徑，依教學把 Apple Pay 感應交易送到自己的 Ledger。" />
+      <meta property="og:title" content="Ledger｜留百工作室 — 讓每次感應，自然成帳" />
+      <meta property="og:description" content="實際畫面、捷徑下載、部署與 iPhone 自動化教學。開源程式公開，你的帳本不公開。" />
+      <meta property="og:type" content="website" />
         <script>
     // 白畫面救火：舊 PWA 快取載入被刪的舊 chunk 時，強制清 cache 重載一次
     window.addEventListener('vite:preloadError', () => {
       if (!sessionStorage.getItem('vite-reloaded')) {
-        sessionStorage.setItem('vite-reload', '1');
+        sessionStorage.setItem('vite-reloaded', '1');
         caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => location.reload());
       }
     });

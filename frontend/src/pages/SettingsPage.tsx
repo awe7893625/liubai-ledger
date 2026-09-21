@@ -77,7 +77,7 @@ const EXPORT_FORMATS: Array<{ format: string; label: string }> = [
 
 // /api 由反向代理掛在網域根目錄，不隨 SPA 的 /ledger/ base path 移動，故用絕對網址而非相對於目前路徑
 function openExport(format: string) {
-  window.open(`https://${location.host}/api/export?format=${format}`, "_blank");
+  window.open(`${API_BASE}/export?format=${encodeURIComponent(format)}`, "_blank", "noopener");
 }
 
 const exportActionsStyle: CSSProperties = {

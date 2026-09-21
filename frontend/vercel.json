@@ -2,10 +2,31 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "redirects": [
-    { "source": "/", "destination": "/setup", "permanent": false }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    {
+      "src": "/api(?:/.*)?",
+      "dest": "/not-an-api.json",
+      "status": 404,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      }
+    },
+    {
+      "src": "/shortcuts/(.*)\\.shortcut",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": "attachment",
+        "X-Content-Type-Options": "nosniff"
+      },
+      "continue": true
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
   ]
 }

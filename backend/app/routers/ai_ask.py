@@ -1,10 +1,4 @@
-"""AI chat — 記帳問答助理。
-
-使用者可以用自然語言問「這個月花了多少」「主要花在哪」「最大的支出」等問題。
-作法：從 DB 預先算好統計（月份合計／分類分布／大筆 Top），塞進 prompt 給本機
-gemma4:12b（think:false）回答；失敗 fallback OpenRouter。統計是事實資料，模型只
-負責把數字講成人話，不讓它編數字。
-"""
+"""Optional AI questions over ledger statistics. No implicit model or filesystem credentials."""
 from __future__ import annotations
 
 import json
@@ -20,10 +14,9 @@ from app.db import q, tx
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
-OLLAMA_BASE = os.environ.get("LEDGER_OLLAMA_BASE", "http://127.0.0.1:11435")
-OLLAMA_MODEL = os.environ.get("LEDGER_OLLAMA_VISION_MODEL", "gemma4:12b")
-OPENROUTER_MODEL = os.environ.get("LEDGER_OPENROUTER_MODEL", "deepseek/deepseek-chat-v3.1")
-KEY_FILE = os.path.expanduser("~/Projects/scratch/.env")
+OLLAMA_BASE = os.environ.get("LEDGER_OLLAMA_BASE", "http://127.0.0.1:11434")
+OLLAMA_MODEL = os.environ.get("LEDGER_OLLAMA_MODEL", "").strip()
+OPENROUTER_MODEL = os.environ.get("LEDGER_AI_OR_MODEL", "").strip()
 
 CATEGORIES = [
     ("c_food", "餐飲"), ("c_transport", "交通"), ("c_home", "居家"),
@@ -35,15 +28,8 @@ CAT_NAME = dict(CATEGORIES)
 
 
 def _load_or_key() -> str | None:
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if key:
-        return key
-    try:
-        with open(KEY_FILE, encoding="utf-8") as fh:
-            m = re.search(r"(sk-or-[A-Za-z0-9_-]+)", fh.read())
-            return m.group(1) if m else None
-    except OSError:
-        return None
+    """Read only explicitly configured environment credentials; never inspect other projects."""
+    return os.environ.get("OPENROUTER_API_KEY") or None
 
 
 def _post_json(url: str, payload: dict, timeout: float, headers: dict | None = None) -> dict:
@@ -199,8 +185,10 @@ def ask(body: AiAskInput):
         f"今天：{today}\n當月統計：\n{stats}"
     )
 
-    # 1) 本機 gemma4（think:false，快）
+    # Optional locally configured model.
     try:
+        if not OLLAMA_MODEL:
+            raise RuntimeError("local model not configured")
         r = _post_json(
             f"{OLLAMA_BASE}/api/chat",
             {
@@ -223,8 +211,8 @@ def ask(body: AiAskInput):
 
     # 2) OpenRouter fallback
     key = _load_or_key()
-    if not key:
-        return {"ok": False, "error": "本機 AI 無回應，且沒有 OpenRouter key"}
+    if not key or not OPENROUTER_MODEL:
+        return {"ok": False, "error": "請先配置本機模型，或 OpenRouter 的金鑰與模型名稱"}
     try:
         r = _post_json(
             "https://openrouter.ai/api/v1/chat/completions",

@@ -1,117 +1,106 @@
-# Ledger
+# Ledger · 留百工作室
 
-**留百工作室**開源的 local-first 個人記帳系統。
+自己的資料，自己的日常。開源、可自架的個人記帳系統，使用 FastAPI + SQLite + React。
 
-[線上 Apple Pay 設定指南](https://liubai-ledger.vercel.app) · GitHub 開源專案（就在本頁）
+[產品網站](https://liubai-ledger.vercel.app) · [畫面導覽](https://liubai-ledger.vercel.app/#preview) · [捷徑安裝](https://liubai-ledger.vercel.app/#shortcuts) · [iPhone 自動化教學](https://liubai-ledger.vercel.app/#automation)
 
-> 覺得有用的話，歡迎到 GitHub 右上角按 **Star**。這能讓更多想做 Apple Pay 自動記帳的人找到這個專案。
+喜歡這個小工具，歡迎在本頁右上角按 **Star**。公開網站是展示與教學，不會接收你的交易，也不連到作者的私人帳本。
 
-FastAPI + SQLite + React，支援手動記帳、預算、分析，以及 iPhone Wallet「交易」自動化把 Apple Pay 消費送回自己的 Ledger。
+## 畫面
 
-> 你的資料留在自己的主機與 SQLite。專案不需要銀行網銀帳密，也不內建作者的卡號、交易紀錄、私人網址或 API key。
+![Ledger 總覽：獨立虛構帳本的實際 App 截圖](frontend/public/screens/overview.webp)
 
-## 特色
+[流水畫面](frontend/public/screens/transactions.webp) · [手動記帳畫面](frontend/public/screens/capture.webp)
 
-- Apple Pay / Wallet 交易自動記帳
-- iPhone Shortcuts `POST /api/wallet`
-- `X-Ledger-Token` 防止陌生請求灌入交易
-- 預設不保存 GPS、原始 Wallet payload 或 raw card label
-- 帳戶、分類、流水、月預算、分析與匯出
-- 手動快速記帳與可選 AI 收據解析
-- SQLite 單機部署，適合 Mac / NAS / 小型主機
-- 手機優先介面，無外部字型或追蹤器
+截圖均來自獨立建立的虛構資料庫，不是任何人的真實交易。產品網站的「模擬刷卡」只改變瀏覽器記憶體中的展示資料。
 
-## 隱私設計
+## 功能與邊界
 
-公開版使用本機單使用者 ID `local`，但 UI 不顯示帳號。初始資料只有「現金」與「未指定卡片」，不建立任何特定銀行或卡尾碼。
+- 手動記帳、交易編輯、帳戶、分類、月預算與分析。
+- Wallet 交易自動化 → 自己的捷徑 → POST /api/wallet。
+- 初始帳戶只有現金與未指定卡片；使用者自行新增卡片與別名。
+- 基本記帳不依賴 AI；位置預設不保存，AI 供應者需另行配置。
+- 這不是銀行同步服務。iPhone Wallet 的感應觸發器不保證涵蓋 Apple Watch、App 內付款、網購或退款，需逐項實測。
+- 本版為單使用者、自架系統。**X-Ledger-Token 只驗證 /api/wallet，不保護其他帳戶、流水、匯出 API。**請使用私人網路，或自行在整個服務前建立登入／存取閘道。不要把裸 API 直接對外公開。
 
-## 快速啟動
+## 安裝自己的 Ledger
 
-```bash
-git clone <THIS_REPOSITORY_URL> ledger
-cd ledger
-cp .env.example .env
-```
+準備 Git、Python 3.11+、Node.js 22.12+。Mac / Linux 可使用以下流程；Windows 需依環境調整虛擬環境啟動命令。
 
-編輯 `.env`，至少把 `LEDGER_INGEST_TOKEN` 改成自己的長隨機字串。
+先從本頁的 Code 選單複製 repository URL，clone 到名為 ledger 的資料夾，進入該目錄。以下命令從 **專案根目錄** 開始：
 
 ```bash
-cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+pip install -r backend/requirements.txt
+cp .env.example .env
+python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 ```
 
-另一個終端：
+把最後一行產生的長隨機值寫進自己的 `.env` 的 `LEDGER_INGEST_TOKEN`。不要使用預設值，也不要把這個值放到公開網站或 commit。
+
+建立自架前端（不要設定 `VITE_PUBLIC_DOCS=1`，那是本專案公開教學站才使用的建置選項）：
 
 ```bash
 cd frontend
-npm install
-npm run dev
+npm ci
+npm run build
+cd ..
 ```
 
-打開 `http://localhost:5173`。
-
-## Apple Pay 自動記帳
-
-iPhone「捷徑」App →「自動化」→ `+` →「交易」，選擇要監聽的卡片，設定為自動執行。
-
-新增「取得 URL 內容」：
-
-- URL：`https://你的-Ledger-網址/api/wallet`
-- 方法：`POST`
-- Header：`X-Ledger-Token` = 你在 `.env` 設定的 `LEDGER_INGEST_TOKEN`
-- Request Body：`JSON`
-
-JSON 欄位：
-
-| key | iOS 交易變數 |
-| --- | --- |
-| `amount` | Amount |
-| `merchant` | Merchant |
-| `card` | Card or Pass |
-| `payment_method` | 固定填 `apple_pay` |
-| `time_source` | 固定填 `wallet_transaction` |
-| `occurred_at` | 可選；沒有就省略 |
-
-網站內也有「我的 → Apple Pay 設定」，可檢查自己的 API URL。
-
-## 讓 iPhone 連到 Ledger
-
-最簡單的私人方案是 Tailscale。先確定 iPhone 與 Ledger 主機都登入同一個 tailnet，再用目前版本的 Tailscale Serve 將服務暴露在 tailnet 內。不同 Tailscale 版本的 CLI 參數可能不同，請以 `tailscale serve --help` 顯示為準。
-
-如果改用公開 HTTPS 網域，務必保留 `LEDGER_INGEST_TOKEN`，並把後端置於 HTTPS reverse proxy 後方。
-
-## 帳戶與 Apple Pay 卡片對應
-
-進「我的 → 帳戶」新增自己的卡片。Apple Pay 傳來的 Card or Pass 名稱會依序比對帳戶 ID、nickname、issuer 與 metadata 中的 `aliases`。沒有命中時會進「未指定卡片」，不會丟掉交易。
-
-## 位置資料
-
-預設 `LEDGER_STORE_LOCATION=false`。如果你自己擴充捷徑送 latitude / longitude / location_name，只有把它改成 `true` 才會存位置。
-
-## AI
-
-AI 完全可選。公開版不會讀取作者電腦上的 key 檔案。若要使用：
-
-```env
-LEDGER_OLLAMA_MODEL=your-local-model
-# 或
-OPENROUTER_API_KEY=your-key
-```
-
-## 測試
+同一個服務提供網站與 API，而且確實載入剛設定的 `.env`：
 
 ```bash
-cd backend && pytest
-cd ../frontend && npm run build
+.venv/bin/python -m uvicorn app.web:app --app-dir backend --env-file .env --host 127.0.0.1 --port 8000
 ```
 
-## 安全提醒
+電腦打開 `http://localhost:8000`。健康檢查是 `http://localhost:8000/api/health`，應回 `status: ok`。服務必須保持運作，手機才能連線。
 
-不要 commit `.env`、SQLite DB、log、Tailscale hostname、私人 IP、API key、真實交易匯出或含卡號的截圖。`.gitignore` 已預設排除這些常見檔案。
+手機使用私人 HTTPS 網址：建議 iPhone 與主機登入同一個 Tailscale 網路，以 **Tailscale Serve 指向本機 8000**。完整操作與可複製命令放在[網站部署步驟](https://liubai-ledger.vercel.app/#install)；另見 [Tailscale 官方 Serve 文件](https://tailscale.com/kb/1242/tailscale-serve)。不要用 Funnel 公開私人帳本。
+
+## 安裝 iPhone 捷徑
+
+在 iPhone Safari 下載以下已簽章的公開模板：
+
+- [Ledger Wallet](https://liubai-ledger.vercel.app/shortcuts/Ledger-Wallet.shortcut)：接收交易自動化的字典輸入。
+- [Ledger Manual](https://liubai-ledger.vercel.app/shortcuts/Ledger-Manual-v1_1.shortcut)：手動詢問金額、商家與卡片／現金。
+
+從 Safari 下載項目或「檔案」App 打開檔案，加入捷徑。打開捷徑右上角 ⋯，將最上方兩個文字動作依序改為：
+
+1. 自己的完整 HTTPS endpoint：`https://自己的主機/api/wallet`。
+2. 自己的 `LEDGER_INGEST_TOKEN`。
+
+請先使用 Manual 以商家「連線測試」、金額 1 元測通，再到自己的流水確認。測試交易需要時自行刪除。
+
+Wallet 版安裝完成不代表自動化已設定：在 iPhone 的捷徑 App 建立「交易／錢包」自動化，新增字典，把交易輸出的 Amount、Merchant、Card or Pass 分別綁到 `amount`、`merchant`、`card`，再執行 Ledger Wallet，輸入選前一步字典。
+
+[完整安裝文件](docs/APPLE_PAY_SHORTCUTS.md) · [四步驟操作圖解](https://liubai-ledger.vercel.app/#automation) · [模板來源及簽章說明](shortcuts/README.md)
+
+下載模板使用不可連線的 `example.invalid` 占位網址，沒有作者的私有主機、憑證或卡片。模板不要求定位，時間由伺服器補上（`server_received`），不假稱是銀行提供的原始時間。
+
+**驗證範圍：**可檢查 plist 結構、動作引用、macOS anyone 簽章與公開下載內容；不代表已在每部 iPhone 完成匯入和真實感應交易驗收。簽章也不是 Apple 對本專案的審核或推薦。
+
+## 本機開發
+
+API-only 模式仍可使用 `app.main:app`。Vite 開發伺服器預設 5173，透過 /api 代理到 8000；請勿將開發伺服器未經保護地對外公開。
+
+```bash
+cd backend
+../.venv/bin/python -m pytest -q
+cd ../frontend
+npm run lint
+npm run build
+npm audit
+```
+
+`app.web` 的測試需要前端 dist 存在，因此完整檢查請先執行一次前端 build。`scripts/check_public_site.py` 為公開網站測試，需額外的 Playwright/Pillow 與 Chrome；這些不是執行 Ledger 的必要依賴。
+
+## 資料與隱私
+
+不要提交 `.env`、SQLite、log、交易匯出、真實收據或含卡號的截圖。公開程式使用 generic 本機 user id，不內建作者帳戶資訊。公用捷徑來源是重新建立的，不沿用含私人設定的分享連結。
+
+匯出檔案與備份請保存在自己的安全儲存空間。啟用雲端 AI 會把相關辨識內容送到你配置的供應者；啟用消費地圖也會向圖磚供應者請求資源。
 
 ## License
 
-MIT — © 留百工作室
+MIT — © 2026 留百工作室。第三方套件與圖示依各自授權。
