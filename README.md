@@ -2,7 +2,7 @@
 
 自己的資料，自己的日常。開源、可自架的個人記帳系統，使用 FastAPI + SQLite + React。
 
-[產品網站](https://liubai-ledger.vercel.app) · [畫面導覽](https://liubai-ledger.vercel.app/#preview) · [捷徑安裝](https://liubai-ledger.vercel.app/#shortcuts) · [iPhone 自動化教學](https://liubai-ledger.vercel.app/#automation)
+[產品網站](https://liubai-ledger.vercel.app) · [互動帳本示範](https://liubai-ledger.vercel.app/demo) · [畫面導覽](https://liubai-ledger.vercel.app/#preview) · [捷徑安裝](https://liubai-ledger.vercel.app/#shortcuts) · [iPhone 自動化教學](https://liubai-ledger.vercel.app/#automation)
 
 喜歡這個小工具，歡迎在本頁右上角按 **Star**。公開網站是展示與教學，不會接收你的交易，也不連到作者的私人帳本。
 
@@ -37,7 +37,9 @@ cp .env.example .env
 python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 ```
 
-把最後一行產生的長隨機值寫進自己的 `.env` 的 `LEDGER_INGEST_TOKEN`。不要使用預設值，也不要把這個值放到公開網站或 commit。
+也可使用 `python3 scripts/setup_env.py` 自動建立權限 0600 的 .env 與新 Token，該工具不覆蓋既有設定。
+
+採用上方手動方式時，把最後一行產生的長隨機值寫進自己的 `.env` 的 `LEDGER_INGEST_TOKEN`。不要使用預設值，也不要把這個值放到公開網站或 commit。
 
 建立自架前端（不要設定 `VITE_PUBLIC_DOCS=1`，那是本專案公開教學站才使用的建置選項）：
 

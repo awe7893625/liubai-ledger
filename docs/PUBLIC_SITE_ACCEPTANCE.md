@@ -4,7 +4,7 @@ Verified on 2026-09-21. This report covers the NexPilot-style Ledger public webs
 
 | Gate | Result |
 |---|---|
-| Backend | 73 tests passed, including same-origin routes and environment-only AI credentials |
+| Backend | 82 tests passed, including same-origin routes and environment-only AI credentials |
 | Frontend lint | Passed |
 | Public production build | Passed |
 | Self-hosted production build | Passed |
@@ -12,7 +12,7 @@ Verified on 2026-09-21. This report covers the NexPilot-style Ledger public webs
 | Browser widths | 320, 375, 390, 430, 768, 1440 px |
 | Themes | Default cream even with OS dark; explicit dark toggle works |
 | Layout | No document-level horizontal overflow in tested sections |
-| Interactive demo | Synthetic add/reset works; no bank or backend request |
+| Interactive demo | Hero add/reset plus preserved /demo amount entry, overview and transaction list; no bank or backend request |
 | Screenshot gallery | Three actual App screenshots; synthetic database; dialog open/Escape works |
 | iPhone tutorial | All four steps can be selected |
 | URL builder | Rejects HTTP, userinfo, query credentials and localhost; HTTPS endpoint copy works |
@@ -34,3 +34,7 @@ The downloaded Shortcuts passed static property-list/action-reference validation
 The ingest token protects only /api/wallet, not all account/history/export endpoints. A private network or independent gateway remains required for safe deployment.
 
 Dependency audit means no issues reported by that audit at this time, not a guarantee of absence of security defects.
+
+## Integration
+
+Incoming main-branch release changes were retained, including the non-overwriting private setup helper, nine release tests, earlier signed download URLs and the functional /demo. The new design applies the NexPilot palette to both the landing page and this demo. Browser-test cleanup is bounded to its own Playwright driver and reports a warning if graceful shutdown stalls.

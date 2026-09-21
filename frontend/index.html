@@ -1,38 +1,50 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-TW">
-   <head>
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#F3EFE6" />
-  <link rel="apple-touch-icon" href="/icon-192.png" />
-  <link rel="icon" href="/icon-192.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-
-      <meta charset="UTF-8" />
-      <meta
-        name="viewport"
-          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-        />
-      <title>Ledger｜留百工作室 — Apple Pay 捷徑自動記帳</title>
-      <meta name="description" content="留百工作室的開源私人記帳系統。查看實際 App 畫面、下載乾淨的 iPhone 記帳捷徑，依教學把 Apple Pay 感應交易送到自己的 Ledger。" />
-      <meta property="og:title" content="Ledger｜留百工作室 — 讓每次感應，自然成帳" />
-      <meta property="og:description" content="實際畫面、捷徑下載、部署與 iPhone 自動化教學。開源程式公開，你的帳本不公開。" />
-      <meta property="og:type" content="website" />
-        <script>
-    // 白畫面救火：舊 PWA 快取載入被刪的舊 chunk 時，強制清 cache 重載一次
-    window.addEventListener('vite:preloadError', () => {
-      if (!sessionStorage.getItem('vite-reloaded')) {
-        sessionStorage.setItem('vite-reloaded', '1');
-        caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => location.reload());
-      }
-    });
-  </script>
-</head>
-   <body>
-      <div id="root"></div>
-      <script
-        type="module"
-          src="/src/main.tsx"
-        ></script>
-      </body>
-   </html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Ledger — 留百工作室｜Apple Pay 自動記帳</title>
+    <meta
+      name="description"
+      content="留百工作室開源記帳系統：實際介面預覽、互動示範、捷徑下載與完整 Apple Pay 安裝教學。把交易留在自己的私人帳本。"
+    />
+    <meta
+      property="og:title"
+      content="Ledger｜留百工作室 — 讓每次感應，自然成帳"
+    />
+    <meta
+      property="og:description"
+      content="看實際畫面、試用示範、安裝捷徑。留百工作室的 local-first 開源記帳系統。"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:image"
+      content="https://liubai-ledger.vercel.app/screens/site-desktop.webp"
+    />
+    <meta name="theme-color" content="#F3EFE6" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script>
+      window.addEventListener("vite:preloadError", () => {
+        try {
+          if (!sessionStorage.getItem("ledger-preload-reloaded")) {
+            sessionStorage.setItem("ledger-preload-reloaded", "1");
+            location.reload();
+          }
+        } catch (_) {
+          /* Respect restricted browser storage. */
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

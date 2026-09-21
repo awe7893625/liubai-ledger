@@ -1,29 +1,31 @@
-"""Existing API + built frontend on one origin. Use a private network or auth gateway."""
+"""One-origin private hosting. Preserve explicit SPA routes and never expose files outside dist."""
 from pathlib import Path
-from starlette.exceptions import HTTPException
-from starlette.responses import JSONResponse
-from starlette.staticfiles import StaticFiles
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
 from app.main import create_app
 
-DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+WEB_ROOT = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+SPA_ROUTES = {"", "dashboard", "ledger", "budget", "capture", "map", "settings", "setup", "assistant", "reflect"}
 
-class SPAFiles(StaticFiles):
-    async def get_response(self, path, scope):
-        if path == "api" or path.startswith("api/"):
-            return JSONResponse({"detail": "API route not found"}, status_code=404)
-        try:
-            return await super().get_response(path, scope)
-        except HTTPException as exc:
-            if exc.status_code != 404 or "." in Path(path).name:
-                raise
-            return await super().get_response("index.html", scope)
-
-def create_web_app(dist=DIST):
-    dist = Path(dist)
-    if not (dist / "index.html").is_file():
+def create_web_app(dist=None):
+    if dist is not None and not (Path(dist) / "index.html").is_file():
         raise RuntimeError("Build frontend first: cd frontend && npm ci && npm run build")
     app = create_app()
-    app.mount("/", SPAFiles(directory=str(dist), html=True), name="ledger-frontend")
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "API route not found")
+        root = (Path(dist) if dist is not None else WEB_ROOT).resolve()
+        target = (root / path).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            raise HTTPException(404, "Not found")
+        if target.is_file():
+            return FileResponse(target)
+        if path.strip("/") in SPA_ROUTES and (root / "index.html").is_file():
+            return FileResponse(root / "index.html")
+        raise HTTPException(404, "Build frontend first, or check the path")
     return app
 
 app = create_web_app()

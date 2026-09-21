@@ -1,6 +1,6 @@
 """Browser acceptance tests for the public site. No real account or transaction data."""
 from __future__ import annotations
-import functools,hashlib,http.server,json,threading,io,sys
+import functools,hashlib,http.server,json,threading,io,sys,os,signal,subprocess
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from PIL import Image
@@ -12,12 +12,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.split('?')[0].startswith('/api'):
             self.send_error(404);return
-        if self.path.split('?')[0] in ['/setup','/setup/']:self.path='/index.html'
+        if self.path.split('?')[0] in ['/setup','/setup/','/demo','/demo/']:self.path='/index.html'
         super().do_GET()
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(DIST)))
 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
 base=f'http://127.0.0.1:{server.server_port}'
 results=[]
+checks_complete=False
+cleanup_fired=threading.Event()
+cleanup_timer=None
+
+def stop_own_driver():
+    # Only the direct Playwright child of this QA process; never another Chrome/session.
+    rows=subprocess.check_output(['ps','-Ao','pid=,ppid=,command=']).decode().splitlines()
+    for row in rows:
+        parts=row.strip().split(None,2)
+        if len(parts)==3 and parts[1]==str(os.getpid()) and 'playwright/driver' in parts[2] and 'run-driver' in parts[2]:
+            cleanup_fired.set()
+            try:os.kill(int(parts[0]),signal.SIGTERM)
+            except ProcessLookupError:pass
+            print('QA cleanup: terminated its own unresponsive Playwright driver',flush=True)
+
+def save_results():
+    (QA/'site-checks.json').write_text(json.dumps({'status':'passed','checks':results,'cleanup_warning':cleanup_fired.is_set()},ensure_ascii=False,indent=2))
+
 def record(name,detail='PASS'):
     results.append(dict(test=name,result=detail));print(name,detail,flush=True)
 try:
@@ -106,7 +124,40 @@ try:
         record('github_star_links')
         assert context.request.get(base+'/api/health').status==404
         record('public_not_an_api')
-        context.close();browser.close()
-    (QA/'site-checks.json').write_text(json.dumps({'status':'passed','checks':results},ensure_ascii=False,indent=2))
+        context.close()
+        for w in [390,1440]:
+            ctx=browser.new_context(viewport={'width':w,'height':950},reduced_motion='reduce')
+            outside=[]
+            def demo_net(route):
+                u=route.request.url
+                if not u.startswith(base) or '/api/' in u:outside.append(u);route.abort()
+                else:route.continue_()
+            ctx.route('**/*',demo_net)
+            page=ctx.new_page();page.goto(base+'/demo',wait_until='networkidle')
+            page.locator('.lb-demo').wait_for()
+            assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+            page.screenshot(path=str(QA/f'full-demo-{w}.png'))
+            page.get_by_role('tab',name='記一筆',exact=True).click()
+            page.get_by_label('金額（新台幣）').fill('19')
+            page.get_by_label('商家或用途').fill('QA示範咖啡')
+            page.get_by_role('button',name='加入示範帳本').click()
+            assert page.get_by_text('QA示範咖啡',exact=True).count()==1
+            page.get_by_role('button',name='重設示範',exact=True).click()
+            assert page.get_by_text('QA示範咖啡',exact=True).count()==0
+            assert not outside,outside
+            record(f'full_demo_{w}','PASS: preserved add/reset, responsive and no network/API submission')
+            ctx.close()
+        checks_complete=True
+        save_results()
+        cleanup_timer=threading.Timer(12,stop_own_driver)
+        cleanup_timer.daemon=True
+        cleanup_timer.start()
+        browser.close()
+    if cleanup_timer:cleanup_timer.cancel()
+    save_results()
+except Exception:
+    if not (checks_complete and cleanup_fired.is_set()):raise
+    save_results()
 finally:
+    if cleanup_timer:cleanup_timer.cancel()
     server.shutdown();server.server_close()

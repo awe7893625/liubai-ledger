@@ -17,3 +17,7 @@ Wallet 版必須在 iPhone 自行建立交易自動化：新增字典，把交�
 ## 重建
 
 在專案根目錄執行 `python3 scripts/build_public_shortcuts.py`，來源會固定生成，簽章檔須另外透過 macOS 產生。請在簽章之前重新掃描來源，絕對不要把自己配置好的 URL / Token 打包分享。
+
+## Compatible earlier templates
+
+The earlier Ledger-ApplePay.shortcut and Ledger-Manual.shortcut public URLs and their sources under `source/` remain unchanged. The new site's manual template uses Ledger-Manual-v1_1.shortcut, so the published older download is not silently overwritten. The new Wallet template and the new manual template are the two entries described by the public manifest.

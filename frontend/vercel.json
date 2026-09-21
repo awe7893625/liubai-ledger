@@ -4,6 +4,13 @@
   "outputDirectory": "dist",
   "routes": [
     {
+      "src": "/.*",
+      "headers": {
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      },
+      "continue": true
+    },
+    {
       "src": "/api(?:/.*)?",
       "dest": "/not-an-api.json",
       "status": 404,
