@@ -29,7 +29,7 @@ def build(manual):
                         "WFWorkflowActionParameters": {"UUID": uid, **params}})
         return uid
     add("comment", WFCommentActionText=(
-        "留百工作室 Ledger 公開範本。請先設定下方 API URL 與 Token。"
+        "留白工作室 Ledger 公開範本。請先設定下方 API URL 與 Token。"
         "只連線到你自己的主機；不索取銀行登入、不取得定位。"
         + ("手動輸入只會記帳，不會執行付款。" if manual else
            "需由交易自動化傳入字典：amount / merchant / card / occurred_at。不可直接執行空輸入。")

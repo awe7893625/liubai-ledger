@@ -54,7 +54,7 @@ async def _lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Ledger by 留百工作室",
+        title="Ledger by 留白工作室",
         version="1.0.0",
         description="Local-first personal finance ledger with Apple Pay Shortcut ingestion.",
         lifespan=_lifespan,

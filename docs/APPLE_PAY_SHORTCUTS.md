@@ -2,6 +2,28 @@
 
 本文件與[公開網站逐步圖解](https://liubai-ledger.vercel.app/#automation)配合使用。查核日期：2026-09-21。
 
+## 編輯畫面：說明可以保留，兩個文字不能刪
+
+對照[逐格教學](https://liubai-ledger.vercel.app/#shortcut-fields)：
+
+| 畫面裡的動作 | 要做什麼 | 要刪嗎？ |
+|---|---|---|
+| 最上方的註解 | 讀取安裝說明，不會送進帳本 | 不必刪；只刪註解不影響設定 |
+| 第一個文字 | 把 example.invalid 整段換成自己的 HTTPS /api/wallet URL | 不可刪動作，只換內容 |
+| 第二個文字 | 把 REPLACE_WITH_YOUR_INGEST_TOKEN 換成自己 .env 的 token 值 | 不可刪動作，只換內容 |
+| 取得 amount／merchant／card 的數值 | 從傳入的字典取值；「數值」是 Value，不是數字型別轉換 | 保留 |
+| URL 與取得 URL 內容 | 第一格 URL → POST；第二格 Token → X-Ledger-Token；三個辭典值 → JSON | 保留 |
+
+不要把 `LEDGER_INGEST_TOKEN=` 整行貼進第二格，只貼等號右邊、不含引號的值。不要將 token 貼到官網、Threads、issue 或截圖。
+
+新版兩格有輸入問題設定；沒有顯示問題時，直接在編輯畫面修改兩個文字內容。網站更新不會修改已加入你手機的捷徑，舊版也可以照上表設定，無需只為整理註解而重建。
+
+若下載新版替換：先保留原捷徑，核對 URL/Token 並測通，再確認交易自動化執行的是哪一份；不要同時留下兩個會處理同一張卡的自動化。
+
+**Wallet 不是手動空跑測試用。**先用 Manual 輸入 1 元與「連線測試」，回應 `ok:true` 與 `tx_id` 且流水核對正確後，再建立交易自動化傳入字典。不要將「通知有出現」當成成功證據。
+
+Apple 官方說明：[取得辭典值](https://support.apple.com/zh-tw/guide/shortcuts/apdf01294032/ios)、[API 要求](https://support.apple.com/zh-tw/guide/shortcuts/apd58d46713f/ios)、[個人化輸入問題](https://support.apple.com/zh-tw/guide/shortcuts/apdf330fd3a0/ios)。教學核對：2026-09-21；裝置界面用詞可能因 iOS 版本不同。
+
 ## 先決條件
 
 必須先在自己的主機部署 Ledger，並取得 iPhone 可連線的 HTTPS 網域。公開展示網站不提供 /api/wallet，也不接受你的 token。

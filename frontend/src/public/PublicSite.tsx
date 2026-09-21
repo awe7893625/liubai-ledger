@@ -142,7 +142,7 @@ function GuideVisual({ step }: { step: number }) {
                 <Zap size={28} />
               </div>
               <h3>Ledger 手動記帳</h3>
-              <p>留百工作室・公開範本</p>
+              <p>留白工作室・公開範本</p>
               <div className="lb-ios-row">
                 文字 <span>你的 API URL</span>
               </div>
@@ -650,7 +650,7 @@ export default function PublicSite() {
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    document.title = "Ledger — 留百工作室｜Apple Pay 自動記帳";
+    document.title = "Ledger — 留白工作室｜Apple Pay 自動記帳";
     document.body.classList.add("lb-body");
     return () => document.body.classList.remove("lb-body");
   }, []);
@@ -686,7 +686,7 @@ export default function PublicSite() {
               L<span />
             </span>
             <span>
-              Ledger<small>留百工作室</small>
+              Ledger<small>留白工作室</small>
             </span>
           </a>
           <nav
@@ -1023,7 +1023,7 @@ export default function PublicSite() {
               <Github size={40} />
             </div>
             <div>
-              <span className="lb-eyebrow">BUILT BY 留百工作室</span>
+              <span className="lb-eyebrow">BUILT BY 留白工作室</span>
               <h2>
                 帳本是你的。
                 <br />
@@ -1044,7 +1044,7 @@ export default function PublicSite() {
       <footer className="lb-footer lb-container">
         <div>
           <strong>Ledger</strong>
-          <span>© 2026 留百工作室 · MIT License</span>
+          <span>© 2026 留白工作室 · MIT License</span>
         </div>
         <div>
           <a

@@ -52,7 +52,7 @@ export function SetupPage() {
           <p className="page-subtitle">不用銀行帳密。Wallet 交易觸發後，由捷徑把必要欄位 POST 到你自己的 Ledger。</p>
           {IS_PUBLIC_DOCS ? (
             <div className="setup-public-actions">
-              <span className="setup-public-badge">留百工作室 · Open Source</span>
+              <span className="setup-public-badge">留白工作室 · Open Source</span>
               {GITHUB_URL ? (
                 <a className="secondary-action" href={GITHUB_URL} target="_blank" rel="noreferrer">
                   <Github size={16} /> GitHub 開源專案 ★

@@ -14,12 +14,23 @@
 				<key>UUID</key>
 				<string>2C2FC2EF-02AC-5C79-ACAB-09ABA0647BC3</string>
 				<key>WFCommentActionText</key>
-				<string>Ledger｜留百工作室 · 公開版
-請修改下面兩個文字動作：第一格 LEDGER_URL，第二格 LEDGER_TOKEN。
-URL 必須是自己的 HTTPS 網域，以 /api/wallet 結尾。Token 必須與自己的伺服器設定相同。
-未設定的 example.invalid 網址不會連到任何人的帳本。
-Wallet 版請由 iPhone 交易自動化傳入字典：amount / merchant / card。
-本模板不要求定位、不讀聯絡人或卡號。回應通知請查看 ok 與 tx_id，不代表銀行交易同步。</string>
+				<string>Ledger｜留白工作室 · 公開版 1.1.2
+這一塊是說明註解：可以保留，不會傳送；只有註解可以刪除。
+下面兩個『文字』是實際設定：只改內容，不要刪掉整個動作。
+先填自己的 URL 與 Token，再按 ▶。金額可填 1、商家填『連線測試』。</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>1999C071-7C95-53C9-8CE1-8424B61BCDD9</string>
+				<key>WFCommentActionText</key>
+				<string>① 網址設定 LEDGER_URL
+下一個『文字』：把整段占位網址換成自己的完整 HTTPS API 網址，以 /api/wallet 結尾。
+不要填公開教學站。不要把 LEDGER_URL= 或說明文字貼進這一格。</string>
 			</dict>
 		</dict>
 		<dict>
@@ -35,6 +46,19 @@ Wallet 版請由 iPhone 交易自動化傳入字典：amount / merchant / card�
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>03AA74D1-7A0A-53EB-B4CD-CC365BF0402B</string>
+				<key>WFCommentActionText</key>
+				<string>② Token 設定 LEDGER_TOKEN
+下一個『文字』：用自己主機 .env 的 LEDGER_INGEST_TOKEN 值取代占位文字。
+只貼等號右邊的值，不含引號、變數名稱或空白。不要刪除此文字動作；不需貼給工作室。</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
 			<string>is.workflow.actions.gettext</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
@@ -42,6 +66,20 @@ Wallet 版請由 iPhone 交易自動化傳入字典：amount / merchant / card�
 				<string>961694D9-B8AA-5CC2-B2A1-D0EB0117D16C</string>
 				<key>WFTextActionText</key>
 				<string>REPLACE_WITH_YOUR_INGEST_TOKEN</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>5733C397-8B03-556A-A9AA-2E41D139D491</string>
+				<key>WFCommentActionText</key>
+				<string>③ 以下是執行區，請保留
+依提示輸入金額、商家與卡片或現金名稱。
+取得 URL 內容已設定 POST、JSON 與 X-Ledger-Token。展開藍色箭頭可檢查。
+通知只是 API 回應；看到 ok:true 與 tx_id，還要到自己的流水確認，不代表銀行已同步。</string>
 			</dict>
 		</dict>
 		<dict>
@@ -443,6 +481,31 @@ Wallet 版請由 iPhone 交易自動化傳入字典：amount / merchant / card�
 	<key>WFQuickActionSurfaces</key>
 	<array/>
 	<key>WFWorkflowImportQuestions</key>
-	<array/>
+	<array>
+		<dict>
+			<key>ActionIndex</key>
+			<integer>2</integer>
+			<key>Category</key>
+			<string>Parameter</string>
+			<key>ParameterKey</key>
+			<string>WFTextActionText</string>
+			<key>Text</key>
+			<string>你的 Ledger API URL（完整 HTTPS 網址，以 /api/wallet 結尾；不可填官網）</string>
+			<key>DefaultValue</key>
+			<string>https://ledger.example.invalid/api/wallet</string>
+		</dict>
+		<dict>
+			<key>ActionIndex</key>
+			<integer>4</integer>
+			<key>Category</key>
+			<string>Parameter</string>
+			<key>ParameterKey</key>
+			<string>WFTextActionText</string>
+			<key>Text</key>
+			<string>你的 LEDGER_INGEST_TOKEN 值（只填等號右邊，不含引號；不要分享）</string>
+			<key>DefaultValue</key>
+			<string>REPLACE_WITH_YOUR_INGEST_TOKEN</string>
+		</dict>
+	</array>
 </dict>
 </plist>

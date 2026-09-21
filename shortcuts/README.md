@@ -21,3 +21,7 @@ Wallet 版必須在 iPhone 自行建立交易自動化：新增字典，把交�
 ## Compatible earlier templates
 
 The earlier Ledger-ApplePay.shortcut and Ledger-Manual.shortcut public URLs and their sources under `source/` remain unchanged. The new site's manual template uses Ledger-Manual-v1_1.shortcut, so the published older download is not silently overwritten. The new Wallet template and the new manual template are the two entries described by the public manifest.
+
+## 1.1.2 設定區分
+
+品牌更正為留白工作室。Wallet／Manual 現在把註解、URL、Token 與執行區分段標示，並為兩個設定文字加入輸入問題。只需換文字內容，不必刪除動作。字典「Value」不是強制數字，商家與卡片仍以文字送出。已安裝版本不會由網站自動更新；替換前保留自己的設定並確認自動化指向。

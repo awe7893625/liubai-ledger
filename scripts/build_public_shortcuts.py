@@ -39,14 +39,24 @@ def build(mode):
     key = lambda name: prefix + "-" + name
     actions = [
         action("comment", key("help"), WFCommentActionText=(
-            "Ledger｜留百工作室 · 公開版\n"
-            "請修改下面兩個文字動作：第一格 LEDGER_URL，第二格 LEDGER_TOKEN。\n"
-            "URL 必須是自己的 HTTPS 網域，以 /api/wallet 結尾。Token 必須與自己的伺服器設定相同。\n"
-            "未設定的 example.invalid 網址不會連到任何人的帳本。\n"
-            "Wallet 版請由 iPhone 交易自動化傳入字典：amount / merchant / card。\n"
-            "本模板不要求定位、不讀聯絡人或卡號。回應通知請查看 ok 與 tx_id，不代表銀行交易同步。")),
+            "Ledger｜留白工作室 · 公開版 1.1.2\n"
+            "這一塊是說明註解：可以保留，不會傳送；只有註解可以刪除。\n"
+            "下面兩個『文字』是實際設定：只改內容，不要刪掉整個動作。\n"
+            + ("Wallet 必須收到交易自動化的字典輸入，不要直接按 ▶ 空跑。先用 Ledger Manual 測通。" if mode == "wallet" else
+               "先填自己的 URL 與 Token，再按 ▶。金額可填 1、商家填『連線測試』。"))),
+        action("comment", key("url-help"), WFCommentActionText=(
+            "① 網址設定 LEDGER_URL\n下一個『文字』：把整段占位網址換成自己的完整 HTTPS API 網址，以 /api/wallet 結尾。\n"
+            "不要填公開教學站。不要把 LEDGER_URL= 或說明文字貼進這一格。")),
         action("gettext", key("url"), WFTextActionText=PLACEHOLDER_URL),
+        action("comment", key("token-help"), WFCommentActionText=(
+            "② Token 設定 LEDGER_TOKEN\n下一個『文字』：用自己主機 .env 的 LEDGER_INGEST_TOKEN 值取代占位文字。\n"
+            "只貼等號右邊的值，不含引號、變數名稱或空白。不要刪除此文字動作；不需貼給工作室。")),
         action("gettext", key("token"), WFTextActionText=PLACEHOLDER_TOKEN),
+        action("comment", key("run-help"), WFCommentActionText=(
+            "③ 以下是執行區，請保留\n"
+            + ("在『捷徑輸入』取得 amount / merchant / card 的『數值』，指的是字典 Value，不是強制轉成數字。商家與卡片仍為文字。\n" if mode == "wallet" else "依提示輸入金額、商家與卡片或現金名稱。\n")
+            + "取得 URL 內容已設定 POST、JSON 與 X-Ledger-Token。展開藍色箭頭可檢查。\n"
+            "通知只是 API 回應；看到 ok:true 與 tx_id，還要到自己的流水確認，不代表銀行已同步。")),
     ]
     if mode == "wallet":
         incoming = {"Value": {"Type": "ExtensionInput"}, "WFSerializationType": "WFTextTokenAttachment"}
@@ -86,7 +96,15 @@ def build(mode):
         "WFWorkflowMinimumClientVersionString": "900",
         "WFWorkflowHasShortcutInputVariables": mode == "wallet",
         "WFWorkflowInputContentItemClasses": ["WFDictionaryContentItem"] if mode == "wallet" else [],
-        "WFWorkflowTypes": [], "WFQuickActionSurfaces": [], "WFWorkflowImportQuestions": [],
+        "WFWorkflowTypes": [], "WFQuickActionSurfaces": [],
+        "WFWorkflowImportQuestions": [
+            {"ActionIndex": 2, "Category": "Parameter", "ParameterKey": "WFTextActionText",
+             "Text": "你的 Ledger API URL（完整 HTTPS 網址，以 /api/wallet 結尾；不可填官網）",
+             "DefaultValue": PLACEHOLDER_URL},
+            {"ActionIndex": 4, "Category": "Parameter", "ParameterKey": "WFTextActionText",
+             "Text": "你的 LEDGER_INGEST_TOKEN 值（只填等號右邊，不含引號；不要分享）",
+             "DefaultValue": PLACEHOLDER_TOKEN},
+        ],
     }
     return data
 
@@ -107,7 +125,7 @@ def validate(data):
     raw=json.dumps(data,ensure_ascii=False)
     for forbidden in ("TriggerOutput", "WFWalletTransactionTrigger", "getcurrentlocation", "contacts", "https://mac.", "X-API-Key"):
         assert forbidden not in raw
-    assert raw.count(PLACEHOLDER_URL)==1
+    assert raw.count(PLACEHOLDER_URL)==2
     assert "X-Ledger-Token" in raw and '"WFHTTPMethod": "POST"' in raw
     assert len([a for a in actions if a["WFWorkflowActionIdentifier"].endswith("downloadurl")])==1
 

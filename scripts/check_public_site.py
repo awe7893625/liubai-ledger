@@ -58,10 +58,16 @@ try:
             assert page.locator('.ledger-site').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(243, 239, 230)'
             assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), f'Horizontal overflow at {width}'
             assert not page.locator('input[type=password]').count()
-            for section in ['preview','install','shortcuts','automation','payload','faq']:
+            for section in ['preview','install','shortcuts','shortcut-fields','automation','payload','faq']:
                 assert page.locator('#'+section).count()==1
                 page.locator('#'+section).scroll_into_view_if_needed()
                 assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'),f'Overflow {width} {section}'
+            body = page.locator('body').inner_text()
+            assert '留白工作室' in body and '留百' not in body
+            assert '改內容，不刪動作' in page.locator('#shortcut-fields').inner_text()
+            assert page.locator('a[href="https://www.threads.net/@blankspacestw"]').count()==1
+            if width in (390,1440):
+                page.locator('#shortcut-fields').screenshot(path=str(QA/f'editor-guide-{width}.png'))
             for image in page.locator('.ls-screen-image img').all():
                 image.scroll_into_view_if_needed();image.evaluate('(el)=>el.loading="eager"')
                 image.evaluate('(el)=>el.decode()')

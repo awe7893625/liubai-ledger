@@ -15,7 +15,7 @@ export default function DemoPage() {
             </span>
             <span>
               <strong>Ledger.</strong>
-              <small>留百工作室</small>
+              <small>留白工作室</small>
             </span>
           </a>
           <a

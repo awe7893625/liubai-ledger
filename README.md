@@ -1,4 +1,6 @@
-# Ledger · 留百工作室
+# Ledger · 留白工作室
+
+[Threads · @blankspacestw](https://www.threads.net/@blankspacestw)
 
 自己的資料，自己的日常。開源、可自架的個人記帳系統，使用 FastAPI + SQLite + React。
 
@@ -62,6 +64,9 @@ cd ..
 
 ## 安裝 iPhone 捷徑
 
+先看[哪裡要改、哪些不能刪](https://liubai-ledger.vercel.app/#shortcut-fields)。註解可保留；兩個「文字」是執行必要的 URL 與 Token，請只改內容、不要刪除動作。下面的辭典取值、URL、POST 動作也要保留。
+
+
 在 iPhone Safari 下載以下已簽章的公開模板：
 
 - [Ledger Wallet](https://liubai-ledger.vercel.app/shortcuts/Ledger-Wallet.shortcut)：接收交易自動化的字典輸入。
@@ -105,4 +110,4 @@ npm audit
 
 ## License
 
-MIT — © 2026 留百工作室。第三方套件與圖示依各自授權。
+MIT — © 2026 留白工作室。第三方套件與圖示依各自授權。

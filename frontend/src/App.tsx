@@ -542,7 +542,7 @@ function AppNavigation() {
           <span className="brand-mark" aria-hidden="true">L</span>
           <span>
             <strong className="brand-title">Ledger</strong>
-            <small className="brand-subtitle">留百工作室 · local-first</small>
+            <small className="brand-subtitle">留白工作室 · local-first</small>
           </span>
         </NavLink>
         <nav aria-label="主要導覽">

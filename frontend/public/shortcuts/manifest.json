@@ -1,17 +1,18 @@
 {
+  "version": "1.1.2",
   "built_on": "2026-09-21",
   "signing_mode": "anyone",
-  "verification": "macOS signing and static structure; iPhone import/tap acceptance must be performed on device",
+  "verification": "Static action/POST contract tests and macOS signing. iPhone configuration and real tap still require device acceptance.",
   "files": [
     {
       "name": "Ledger-Wallet.shortcut",
-      "bytes": 23557,
-      "sha256": "d32b41ba876d2e55c0d58780415e834876b30568b5336f73e229b9291fc1f68f"
+      "bytes": 24161,
+      "sha256": "1cf350568054166382e4d4fee9bbf2c68063269d46fbe8faf9b3b89acd1a0694"
     },
     {
       "name": "Ledger-Manual-v1_1.shortcut",
-      "bytes": 23620,
-      "sha256": "75395c3c81db8769464beb03148034042f4d29db2214a8702df8b0332f9e3c77"
+      "bytes": 24094,
+      "sha256": "bb6cea209e60037764209bb82f343cfd90c1a79c98e43abc4333456f7f56d6b0"
     }
   ]
 }

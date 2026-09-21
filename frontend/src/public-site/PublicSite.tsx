@@ -25,6 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { ShortcutFieldGuide } from "./ShortcutFieldGuide";
 import "./site.css";
 import "./demo-theme.css";
 
@@ -638,7 +639,7 @@ export function PublicSite() {
   const [menu, setMenu] = useState(false);
   const [progress, setProgress] = useState(0);
   useEffect(() => {
-    document.title = "Ledger｜留百工作室 — 讓每次感應，自然成帳";
+    document.title = "Ledger｜留白工作室 — 讓每次感應，自然成帳";
     try {
       localStorage.setItem("ledger.site.theme", theme);
     } catch {
@@ -691,7 +692,7 @@ export function PublicSite() {
               <strong>
                 Ledger<span className="ls-brand-dot">.</span>
               </strong>
-              <small>留百工作室</small>
+              <small>留白工作室</small>
             </span>
           </a>
           <nav className="ls-desktop-nav" aria-label="網站導覽">
@@ -1008,7 +1009,7 @@ export function PublicSite() {
                 [
                   "02",
                   "改兩格設定",
-                  "打開捷徑右上角 ⋯，把最上方 LEDGER_URL 與 LEDGER_TOKEN 兩個文字動作改成自己的值。",
+                  "打開捷徑右上角 ⋯，只改兩個「文字」內的網址與 Token，不要刪掉動作。下方有逐格說明。",
                 ],
                 [
                   "03",
@@ -1023,6 +1024,7 @@ export function PublicSite() {
                 </div>
               ))}
             </div>
+            <ShortcutFieldGuide />
             <UrlBuilder />
             <div className="ls-shortcut-check">
               <Check size={15} />
@@ -1155,7 +1157,7 @@ export function PublicSite() {
             </span>
             <span>
               <strong>Ledger.</strong>
-              <small>留百工作室</small>
+              <small>留白工作室</small>
             </span>
           </a>
           <p>
@@ -1174,12 +1176,19 @@ export function PublicSite() {
                 </a>
               </>
             ) : null}
+            <a
+              href="https://www.threads.net/@blankspacestw"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Threads · @blankspacestw
+            </a>
             <a href="#faq">常見問題</a>
           </nav>
         </div>
         <div className="ls-footer-bottom ls-wrap">
-          <span>© 2026 留百工作室</span>
-          <span>Public site v1.1 · NexPilot palette</span>
+          <span>© 2026 留白工作室</span>
+          <span>Public site v1.1.2 · NexPilot palette</span>
         </div>
       </footer>
     </div>

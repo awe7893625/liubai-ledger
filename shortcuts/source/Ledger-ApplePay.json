@@ -5,7 +5,7 @@
       "WFWorkflowActionIdentifier": "is.workflow.actions.comment",
       "WFWorkflowActionParameters": {
         "UUID": "E99493D9-2A6F-5B00-B983-24755B353C43",
-        "WFCommentActionText": "留百工作室 Ledger 公開範本。請先設定下方 API URL 與 Token。只連線到你自己的主機；不索取銀行登入、不取得定位。需由交易自動化傳入字典：amount / merchant / card / occurred_at。不可直接執行空輸入。"
+        "WFCommentActionText": "留白工作室 Ledger 公開範本。請先設定下方 API URL 與 Token。只連線到你自己的主機；不索取銀行登入、不取得定位。需由交易自動化傳入字典：amount / merchant / card / occurred_at。不可直接執行空輸入。"
       }
     },
     {

@@ -44,7 +44,7 @@ def test_server_boot():
     from app.main import app       # noqa: E402
     from app.db import init_db
     init_db()
-    assert app.title == "Ledger by 留百工作室"
+    assert app.title == "Ledger by 留白工作室"
     paths = [getattr(r, "path", "") for r in app.routes]
     assert any(p.startswith("/api") for p in paths), "no /api routes: {}".format(
         paths
