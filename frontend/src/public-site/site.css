@@ -2737,3 +2737,265 @@
 .ledger-site .ls-footer nav{flex-wrap:wrap;justify-content:flex-end;column-gap:18px;row-gap:0}
 @media(max-width:800px){.ls-field-guide{padding:22px!important}.ls-field-grid{grid-template-columns:1fr}.ls-field-preview{min-height:0}.ls-field-card header{padding:14px}.ls-field-card>p{font-size:13px}.ls-field-runtime p{font-size:13px}.ls-field-checklist ol{font-size:13px}}
 @media(max-width:480px){.ls-field-guide{padding:20px 16px!important}.ls-field-heading h3{font-size:21px}.ls-field-heading p{font-size:13px}.ls-field-card header span{margin-left:auto}.ls-field-preview code{font-size:12px}.ls-field-request-grid{grid-template-columns:1fr}.ls-field-checklist{padding:15px}.ls-field-runtime{gap:8px}.ls-field-runtime h4{font-size:13px}.ls-field-update{font-size:11px}.ledger-site .ls-footer nav{justify-content:flex-start;column-gap:20px;row-gap:0}}
+
+/* Cloud v2 pairing — intentionally isolated from the legacy self-host setup. */
+.ls-connect-shell {
+  padding: 34px 0 72px;
+  display: grid;
+  gap: 18px;
+}
+.ls-connect-header,
+.ls-connect-card-head,
+.ls-device-row,
+.ls-connect-trust {
+  display: flex;
+  align-items: center;
+}
+.ls-connect-header {
+  justify-content: space-between;
+  min-height: 56px;
+}
+.ls-connect-header .ls-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ls-brand-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ls-strong);
+  border-radius: 10px;
+  background: var(--ls-paper);
+  font-weight: 750;
+}
+.ls-connect-card {
+  position: relative;
+  background: var(--ls-paper);
+  border: 1px solid var(--ls-line);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: var(--ls-shadow);
+}
+.ls-connect-card h1 {
+  margin-top: 8px;
+  max-width: 780px;
+  font-size: clamp(2rem, 6vw, 4.15rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+.ls-connect-card h2 {
+  margin: 8px 0 8px;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+.ls-connect-card p {
+  color: var(--ls-muted);
+  max-width: 760px;
+}
+.ls-connect-hero {
+  overflow: hidden;
+  padding: 38px;
+}
+.ls-connect-icon {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: var(--ls-accent-soft);
+  color: var(--ls-accent-ink);
+}
+.ls-connect-lead {
+  margin-top: 18px !important;
+  font-size: 1.05rem;
+}
+.ls-connect-trust {
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 26px;
+  color: var(--ls-faint);
+  font-size: 0.9rem;
+}
+.ls-connect-trust span,
+.ls-success-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ls-connect-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.ls-step-chip {
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--ls-soft);
+  color: var(--ls-faint);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+}
+.ls-connect-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 18px;
+}
+.ls-connect-form input {
+  min-width: 0;
+  border: 1px solid var(--ls-strong);
+  border-radius: 13px;
+  padding: 12px 14px;
+  background: var(--ls-bg);
+  color: var(--ls-text);
+}
+.ls-connect-card > .ls-button {
+  margin-top: 18px;
+}
+.ls-connect-card small {
+  display: block;
+  margin-top: 10px;
+  color: var(--ls-faint);
+}
+.ls-connect-card-head {
+  justify-content: space-between;
+  gap: 18px;
+}
+.ls-success-pill {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ls-green) 13%, transparent);
+  color: var(--ls-green);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.ls-device-list {
+  margin-top: 10px;
+}
+.ls-device-row {
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 0;
+  border-top: 1px solid var(--ls-line);
+}
+.ls-device-row:first-child {
+  border-top: 0;
+}
+.ls-device-row strong,
+.ls-device-row small {
+  display: block;
+}
+.ls-device-row small {
+  margin: 3px 0 0;
+}
+.ls-danger-ghost {
+  color: #a23f35;
+  background: transparent;
+}
+.ls-connect-message {
+  padding: 12px 14px;
+  border: 1px solid var(--ls-line);
+  border-radius: 13px;
+  background: var(--ls-paper);
+}
+.ls-connect-footnote,
+.ls-connect-muted {
+  color: var(--ls-faint) !important;
+  font-size: 0.88rem;
+}
+@media (max-width: 720px) {
+  .ls-connect-shell {
+    width: calc(100% - 28px);
+    padding-top: 18px;
+  }
+  .ls-connect-card,
+  .ls-connect-hero {
+    padding: 22px;
+    border-radius: 20px;
+  }
+  .ls-connect-grid,
+  .ls-connect-form {
+    grid-template-columns: 1fr;
+  }
+  .ls-connect-icon {
+    position: static;
+    margin-bottom: 22px;
+  }
+  .ls-connect-card h1 {
+    font-size: clamp(2rem, 11vw, 3rem);
+  }
+  .ls-device-row {
+    align-items: flex-start;
+  }
+}
+
+.ls-cloud-tx-list {
+  margin-top: 12px;
+  display: grid;
+}
+.ls-cloud-tx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 0;
+  border-top: 1px solid var(--ls-line);
+}
+.ls-cloud-tx-row:first-child {
+  border-top: 0;
+}
+.ls-cloud-tx-row > div:first-child {
+  min-width: 0;
+}
+.ls-cloud-tx-row strong,
+.ls-cloud-tx-row small {
+  display: block;
+}
+.ls-cloud-tx-row small {
+  color: var(--ls-faint);
+  margin-top: 3px;
+}
+.ls-cloud-tx-meta {
+  text-align: right;
+  flex-shrink: 0;
+}
+.ls-cloud-tx-meta > strong {
+  font-variant-numeric: tabular-nums;
+}
+.ls-cloud-tx-meta > span {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--ls-soft);
+  color: var(--ls-faint);
+  font-size: 0.72rem;
+}
+.ls-cloud-tx-meta > span[data-status="confirmed"] {
+  background: color-mix(in srgb, var(--ls-green) 13%, transparent);
+  color: var(--ls-green);
+}
+@media (max-width: 560px) {
+  .ls-cloud-tx-row {
+    align-items: flex-start;
+  }
+  .ls-cloud-tx-meta {
+    max-width: 42%;
+  }
+  .ls-connect-card-head {
+    align-items: flex-start;
+  }
+  .ls-connect-card-head > .ls-button {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+}

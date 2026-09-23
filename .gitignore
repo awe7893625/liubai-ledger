@@ -28,3 +28,11 @@ logs/
 .vercel/
 .env.*
 !.env.example
+
+# Cloud v2 Shortcut signing outputs (generated per environment)
+shortcuts/source/Liubai-Cloud.unsigned.shortcut
+shortcuts/source/Liubai-Cloud-preview.shortcut
+
+# Supabase CLI local state
+cloud/supabase/.temp/
+cloud/supabase/.branches/

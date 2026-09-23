@@ -18,6 +18,7 @@ import {
   Plus,
   Server,
   ShieldCheck,
+  Smartphone,
   Sun,
   Terminal,
   Wallet,
@@ -768,7 +769,10 @@ export function PublicSite() {
             </p>
             <div className="ls-hero-actions">
               <a className="ls-button ls-primary" href="#shortcuts">
-                安裝記帳捷徑 <ArrowRight size={17} />
+                自架版安裝 <ArrowRight size={17} />
+              </a>
+              <a className="ls-button ls-secondary" href="/connect">
+                不用電腦 · Cloud v2 <Smartphone size={16} />
               </a>
               <a className="ls-button ls-secondary" href="#preview">
                 先看看畫面 <ArrowDown size={16} />
