@@ -1,6 +1,6 @@
 import { createClient, type Session } from "@supabase/supabase-js";
 import { CheckCircle2, Cloud, Link2, LogOut, ShieldCheck, Smartphone, Unplug } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./site.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
@@ -72,6 +72,24 @@ function statusLabel(status: CloudTransaction["status"]): string {
   return status === "confirmed" ? "已記帳" : status === "pending" ? "待確認" : status === "duplicate" ? "重複" : "需處理";
 }
 
+async function cloudRequest<T>(
+  path: string,
+  session: Session,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      ...(init.headers ?? {}),
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || `Cloud API ${response.status}`);
+  return data as T;
+}
+
 export function CloudConnect() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -82,21 +100,20 @@ export function CloudConnect() {
   const [transactions, setTransactions] = useState<CloudTransaction[]>([]);
   const paired = useMemo(() => new URLSearchParams(window.location.search).get("paired") === "1", []);
 
-  const loadCloudData = async () => {
-    if (!supabase) return;
+  const loadCloudData = useCallback(async () => {
+    if (!supabase || !session) return;
     const [deviceResult, transactionResult] = await Promise.all([
-      supabase.functions.invoke("devices", { method: "GET" }),
+      cloudRequest<{ ok: boolean; devices: Device[] }>("/api/v2/devices", session),
       supabase
         .from("ledger_transactions")
         .select("id,amount_minor,currency,merchant,card_label,status,occurred_at")
         .order("occurred_at", { ascending: false })
         .limit(12),
     ]);
-    if (deviceResult.error) throw deviceResult.error;
     if (transactionResult.error) throw transactionResult.error;
-    setDevices((deviceResult.data?.devices ?? []) as Device[]);
+    setDevices(deviceResult.devices ?? []);
     setTransactions((transactionResult.data ?? []) as CloudTransaction[]);
-  };
+  }, [session]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -108,7 +125,7 @@ export function CloudConnect() {
   useEffect(() => {
     if (!session) return;
     void loadCloudData().catch(() => setMessage("目前無法讀取雲端帳本資料。"));
-  }, [session]);
+  }, [session, loadCloudData]);
 
   const signIn = async () => {
     if (!supabase || !email.trim()) return;
@@ -122,35 +139,39 @@ export function CloudConnect() {
     setMessage(error ? "登入信寄送失敗，請稍後重試。" : "登入連結已寄出，請回到這支 iPhone 開啟。");
   };
   const startPairing = async () => {
-    if (!supabase) return;
+    if (!session) return;
     setBusy(true);
     setMessage("");
-    const { data, error } = await supabase.functions.invoke<PairStart>("pair-start", {
-      method: "POST",
-      body: {},
-    });
-    setBusy(false);
-    if (error || !data?.pair_ticket) {
+    try {
+      const data = await cloudRequest<PairStart>("/api/v2/pair/start", session, {
+        method: "POST",
+        body: "{}",
+      });
+      if (!data.pair_ticket) throw new Error("Missing pair ticket");
+      setTicket(data);
+      window.location.href = shortcutUrl(data.pair_ticket);
+    } catch {
       setMessage("無法建立連接票券，請重新登入後再試。");
-      return;
+    } finally {
+      setBusy(false);
     }
-    setTicket(data);
-    window.location.href = shortcutUrl(data.pair_ticket);
   };
 
   const revoke = async (deviceId: string) => {
-    if (!supabase) return;
+    if (!session) return;
     setBusy(true);
-    const { error } = await supabase.functions.invoke("devices", {
-      method: "POST",
-      body: { device_id: deviceId, action: "revoke" },
-    });
-    setBusy(false);
-    if (error) {
+    setMessage("");
+    try {
+      await cloudRequest("/api/v2/devices", session, {
+        method: "POST",
+        body: JSON.stringify({ device_id: deviceId }),
+      });
+      await loadCloudData();
+    } catch {
       setMessage("解除裝置失敗，請稍後重試。");
-      return;
+    } finally {
+      setBusy(false);
     }
-    await loadCloudData();
   };
 
   if (!CLOUD_READY) {

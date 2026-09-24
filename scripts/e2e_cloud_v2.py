@@ -1,7 +1,8 @@
 """Local E2E for Liubai Ledger Cloud v2.
 
-Requires an isolated local Supabase stack started from ./cloud.
-Creates and deletes a synthetic auth user; never targets production.
+Requires an isolated local Supabase stack plus Vercel dev on LEDGER_E2E_APP_URL.
+Exercises the canonical Vercel /api/v2 path, creates a synthetic auth user, and
+deletes it at the end. It never targets the production Ledger.
 """
 from __future__ import annotations
 
@@ -64,6 +65,7 @@ def request(
 def main() -> int:
     env = supabase_env()
     api = env.get("API_URL", "http://127.0.0.1:54321").rstrip("/")
+    app = os.environ.get("LEDGER_E2E_APP_URL", "http://127.0.0.1:5180").rstrip("/")
     anon = env.get("ANON_KEY")
     service = env.get("SERVICE_ROLE_KEY")
     if not anon or not service:
@@ -95,11 +97,12 @@ def main() -> int:
         assert isinstance(login, dict) and login.get("access_token")
         access = str(login["access_token"])
         user_headers = {"apikey": anon, "Authorization": f"Bearer {access}"}
+        app_user_headers = {"Authorization": f"Bearer {access}"}
 
         _, pair = request(
             "POST",
-            f"{api}/functions/v1/pair-start",
-            headers=user_headers,
+            f"{app}/api/v2/pair/start",
+            headers=app_user_headers,
             body={},
             expected=(201,),
         )
@@ -107,7 +110,7 @@ def main() -> int:
         ticket = str(pair["pair_ticket"])
         _, exchanged = request(
             "POST",
-            f"{api}/functions/v1/pair-exchange",
+            f"{app}/api/v2/pair/exchange",
             headers=public_headers,
             body={"pair_ticket": f"pair:{ticket}", "device_name": "E2E iPhone"},
             expected=(201,),
@@ -118,7 +121,7 @@ def main() -> int:
 
         request(
             "POST",
-            f"{api}/functions/v1/pair-exchange",
+            f"{app}/api/v2/pair/exchange",
             headers=public_headers,
             body={"pair_ticket": ticket, "device_name": "Replay"},
             expected=(410,),
@@ -134,10 +137,10 @@ def main() -> int:
             "payment_method": "apple_pay",
             "time_source": "shortcut_trigger",
         }
-        device_headers = {**public_headers, "X-Ledger-Device-Token": device_token}
+        device_headers = {"X-Ledger-Device-Token": device_token}
         _, first = request(
             "POST",
-            f"{api}/functions/v1/wallet-ingest",
+            f"{app}/api/v2/wallet/ingest",
             headers=device_headers,
             body=tx_body,
             expected=(201,),
@@ -147,7 +150,7 @@ def main() -> int:
 
         _, replay = request(
             "POST",
-            f"{api}/functions/v1/wallet-ingest",
+            f"{app}/api/v2/wallet/ingest",
             headers=device_headers,
             body=tx_body,
             expected=(200,),
@@ -167,14 +170,14 @@ def main() -> int:
 
         request(
             "POST",
-            f"{api}/functions/v1/devices",
-            headers=user_headers,
+            f"{app}/api/v2/devices",
+            headers=app_user_headers,
             body={"device_id": device_id},
             expected=(200,),
         )
         request(
             "POST",
-            f"{api}/functions/v1/wallet-ingest",
+            f"{app}/api/v2/wallet/ingest",
             headers=device_headers,
             body={**tx_body, "request_id": "e2e-after-revoke"},
             expected=(401,),

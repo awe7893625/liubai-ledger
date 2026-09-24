@@ -118,7 +118,7 @@
 				<key>UUID</key>
 				<string>75B5F4E4-8915-5119-90C1-42FA474E91DB</string>
 				<key>WFURLActionURL</key>
-				<string>https://PROJECT.supabase.co/functions/v1/pair-exchange</string>
+				<string>https://liubai-ledger-cloud-v2-preview.vercel.app/api/v2/pair/exchange</string>
 			</dict>
 		</dict>
 		<dict>
@@ -534,7 +534,7 @@
 				<key>UUID</key>
 				<string>15FFB499-9774-5B93-B4C3-6E36133FE76B</string>
 				<key>WFURLActionURL</key>
-				<string>https://PROJECT.supabase.co/functions/v1/wallet-ingest</string>
+				<string>https://liubai-ledger-cloud-v2-preview.vercel.app/api/v2/wallet/ingest</string>
 			</dict>
 		</dict>
 		<dict>

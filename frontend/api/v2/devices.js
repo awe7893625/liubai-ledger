@@ -1,13 +1,13 @@
-import { adminClient, errorResponse, HttpError, json, options, requireUser } from "../_shared/core.ts";
+import {
+  adminClient,
+  bodyOf,
+  handleError,
+  httpError,
+  requireUser,
+  send,
+} from "../_shared/cloud.js";
 
-type RevokeBody = {
-  device_id?: string;
-};
-
-Deno.serve(async (req) => {
-  const preflight = options(req);
-  if (preflight) return preflight;
-
+export default async function handler(req, res) {
   try {
     const user = await requireUser(req);
     const db = adminClient();
@@ -19,16 +19,17 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return json({ ok: true, devices: data ?? [] });
+      return send(res, 200, { ok: true, devices: data || [] });
     }
 
     if (req.method !== "POST" && req.method !== "PATCH") {
-      return json({ ok: false, error: "Method not allowed" }, 405);
+      res.setHeader("Allow", "GET, POST, PATCH");
+      return send(res, 405, { ok: false, error: "Method not allowed" });
     }
+    const body = bodyOf(req);
+    const deviceId = String(body.device_id || "").trim();
+    if (!deviceId) throw httpError(400, "device_id required");
 
-    const body = await req.json() as RevokeBody;
-    const deviceId = (body.device_id ?? "").trim();
-    if (!deviceId) throw new HttpError(400, "device_id required");
     const { data: device, error } = await db
       .from("ledger_devices")
       .update({ revoked_at: new Date().toISOString() })
@@ -38,10 +39,10 @@ Deno.serve(async (req) => {
       .select("id,name,revoked_at")
       .maybeSingle();
     if (error) throw error;
-    if (!device) throw new HttpError(404, "Device not found or already revoked");
+    if (!device) throw httpError(404, "Device not found or already revoked");
 
-    return json({ ok: true, device });
+    return send(res, 200, { ok: true, device });
   } catch (error) {
-    return errorResponse(error);
+    return handleError(res, error);
   }
-});
+}

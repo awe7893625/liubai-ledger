@@ -1,13 +1,5 @@
 project_id = "liubai-ledger-cloud-v2"
 
-[functions.pair-start]
-verify_jwt = true
-
-[functions.pair-exchange]
-verify_jwt = false
-
-[functions.wallet-ingest]
-verify_jwt = false
-
-[functions.devices]
-verify_jwt = true
+[auth]
+site_url = "http://127.0.0.1:5180"
+additional_redirect_urls = ["http://127.0.0.1:5180/connect"]

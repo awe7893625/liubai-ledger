@@ -17,9 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "shortcuts" / "src" / "Liubai-Cloud.plist"
 UNSIGNED = ROOT / "shortcuts" / "source" / "Liubai-Cloud.unsigned.shortcut"
-API_BASE = os.environ.get("LEDGER_CLOUD_API_BASE", "https://PROJECT.supabase.co").rstrip("/")
-PAIR_URL = API_BASE + "/functions/v1/pair-exchange"
-INGEST_URL = API_BASE + "/functions/v1/wallet-ingest"
+API_BASE = os.environ.get("LEDGER_CLOUD_API_BASE", "https://PROJECT.vercel.app").rstrip("/")
+PAIR_URL = API_BASE + "/api/v2/pair/exchange"
+INGEST_URL = API_BASE + "/api/v2/wallet/ingest"
 NAMESPACE = uuid.UUID("447d32f5-a096-4be8-aada-4bb8b6aa88d2")
 
 

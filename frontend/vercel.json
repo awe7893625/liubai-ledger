@@ -11,15 +11,6 @@
       "continue": true
     },
     {
-      "src": "/api(?:/.*)?",
-      "dest": "/not-an-api.json",
-      "status": 404,
-      "headers": {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store"
-      }
-    },
-    {
       "src": "/shortcuts/(.*)\\.shortcut",
       "headers": {
         "Content-Type": "application/octet-stream",
@@ -30,6 +21,15 @@
     },
     {
       "handle": "filesystem"
+    },
+    {
+      "src": "/api(?:/.*)?",
+      "dest": "/not-an-api.json",
+      "status": 404,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      }
     },
     {
       "src": "/.*",

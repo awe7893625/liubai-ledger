@@ -1,9 +1,0 @@
-{
-  "nodeModulesDir": "auto",
-  "tasks": {
-    "test": "deno test --allow-env=LEDGER_ALLOWED_ORIGIN _shared/core_test.ts"
-  },
-  "compilerOptions": {
-    "strict": true
-  }
-}

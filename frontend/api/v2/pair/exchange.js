@@ -1,24 +1,27 @@
-import { adminClient, errorResponse, HttpError, json, options, randomToken, sha256Hex } from "../_shared/core.ts";
+import {
+  adminClient,
+  bodyOf,
+  handleError,
+  httpError,
+  randomToken,
+  send,
+  sha256Hex,
+} from "../../_shared/cloud.js";
 
-type PairBody = {
-  pair_ticket?: string;
-  device_name?: string;
-};
-
-Deno.serve(async (req) => {
-  const preflight = options(req);
-  if (preflight) return preflight;
-  if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return send(res, 405, { ok: false, error: "Method not allowed" });
+  }
 
   try {
-    const body = await req.json() as PairBody;
-    const rawTicket = (body.pair_ticket ?? "").trim().replace(/^pair:/, "");
-    if (rawTicket.length < 24) throw new HttpError(400, "Invalid pairing ticket");
+    const body = bodyOf(req);
+    const rawTicket = String(body.pair_ticket || "").trim().replace(/^pair:/, "");
+    if (rawTicket.length < 24) throw httpError(400, "Invalid pairing ticket");
 
-    const ticketHash = await sha256Hex(rawTicket);
     const db = adminClient();
     const now = new Date().toISOString();
-
+    const ticketHash = sha256Hex(rawTicket);
     const { data: ticket, error: findError } = await db
       .from("ledger_pair_tickets")
       .select("id,user_id,expires_at,used_at")
@@ -27,7 +30,7 @@ Deno.serve(async (req) => {
       .gt("expires_at", now)
       .maybeSingle();
     if (findError) throw findError;
-    if (!ticket) throw new HttpError(410, "Pairing link expired or already used");
+    if (!ticket) throw httpError(410, "Pairing link expired or already used");
 
     const { data: claimed, error: claimError } = await db
       .from("ledger_pair_tickets")
@@ -37,11 +40,11 @@ Deno.serve(async (req) => {
       .select("user_id")
       .maybeSingle();
     if (claimError) throw claimError;
-    if (!claimed) throw new HttpError(409, "Pairing link already used");
-
+    if (!claimed) throw httpError(409, "Pairing link already used");
     const deviceToken = `ldb_dev_${randomToken(32)}`;
-    const tokenHash = await sha256Hex(deviceToken);
-    const deviceName = (body.device_name ?? "iPhone").trim().slice(0, 80) || "iPhone";
+    const tokenHash = sha256Hex(deviceToken);
+    const deviceName = String(body.device_name || "iPhone").trim().slice(0, 80) || "iPhone";
+
     const { data: device, error: deviceError } = await db
       .from("ledger_devices")
       .insert({
@@ -54,13 +57,13 @@ Deno.serve(async (req) => {
       .single();
     if (deviceError) throw deviceError;
 
-    return json({
+    return send(res, 201, {
       ok: true,
       device_token: deviceToken,
       device,
-      ingest_path: "/functions/v1/wallet-ingest",
-    }, 201);
+      ingest_path: "/api/v2/wallet/ingest",
+    });
   } catch (error) {
-    return errorResponse(error);
+    return handleError(res, error);
   }
-});
+}

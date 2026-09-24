@@ -1,43 +1,36 @@
-import { adminClient, errorResponse, HttpError, json, normalizeAmount, normalizedMerchant, options, sha256Hex } from "../_shared/core.ts";
+import {
+  adminClient,
+  bodyOf,
+  handleError,
+  httpError,
+  normalizeAmount,
+  normalizedMerchant,
+  safeCurrency,
+  send,
+  sha256Hex,
+} from "../../_shared/cloud.js";
 
-type WalletBody = {
-  request_id?: string;
-  amount?: unknown;
-  currency?: string;
-  merchant?: unknown;
-  card?: unknown;
-  occurred_at?: string;
-  payment_method?: string;
-  time_source?: string;
-};
-
-function deviceToken(req: Request): string {
-  const explicit = (
-    req.headers.get("X-Ledger-Device-Token") ??
-    req.headers.get("X-Ledger-Device")
-  )?.trim();
+function deviceToken(req) {
+  const explicit = String(req.headers["x-ledger-device-token"] || "").trim();
   if (explicit) return explicit;
-  const authorization = req.headers.get("Authorization")?.trim() ?? "";
+  const authorization = String(req.headers.authorization || "").trim();
   if (authorization.startsWith("Device ")) return authorization.slice(7).trim();
-  throw new HttpError(401, "Device token required");
+  throw httpError(401, "Device token required");
 }
 
-function safeCurrency(value: unknown): string {
-  return typeof value === "string" && /^[A-Z]{3}$/.test(value.toUpperCase())
-    ? value.toUpperCase()
-    : "TWD";
-}
-
-Deno.serve(async (req) => {
-  const preflight = options(req);
-  if (preflight) return preflight;
-  if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return send(res, 405, { ok: false, error: "Method not allowed" });
+  }
 
   try {
     const rawToken = deviceToken(req);
-    if (!rawToken.startsWith("ldb_dev_") || rawToken.length < 40) throw new HttpError(401, "Invalid device token");
-    const tokenHash = await sha256Hex(rawToken);
+    if (!rawToken.startsWith("ldb_dev_") || rawToken.length < 40) {
+      throw httpError(401, "Invalid device token");
+    }
     const db = adminClient();
+    const tokenHash = sha256Hex(rawToken);
     const { data: device, error: deviceError } = await db
       .from("ledger_devices")
       .select("id,user_id,revoked_at")
@@ -45,9 +38,9 @@ Deno.serve(async (req) => {
       .is("revoked_at", null)
       .maybeSingle();
     if (deviceError) throw deviceError;
-    if (!device) throw new HttpError(401, "Unknown or revoked device");
+    if (!device) throw httpError(401, "Unknown or revoked device");
 
-    const body = await req.json() as WalletBody;
+    const body = bodyOf(req);
     const amountMinor = normalizeAmount(body.amount);
     const merchant = normalizedMerchant(body.merchant);
     const card = normalizedMerchant(body.card);
@@ -56,16 +49,20 @@ Deno.serve(async (req) => {
       : new Date().toISOString();
     const currency = safeCurrency(body.currency);
 
-    const explicitRequestId = (body.request_id ?? "").trim();
+    const explicitRequestId = String(body.request_id || "").trim();
     const fallbackBucket = Math.floor(new Date(occurredAt).getTime() / 120000);
-    const requestId = explicitRequestId || await sha256Hex([
-      "wallet-v2", device.id, String(amountMinor), merchant ?? "", card ?? "", String(fallbackBucket),
+    const requestId = explicitRequestId || sha256Hex([
+      "wallet-v2",
+      device.id,
+      String(amountMinor),
+      merchant || "",
+      card || "",
+      String(fallbackBucket),
     ].join("|"));
-
-    if (requestId.length > 160) throw new HttpError(400, "request_id too long");
+    if (requestId.length > 160) throw httpError(400, "request_id too long");
 
     const eventStatus = amountMinor === null || !merchant ? "needs_review" : "received";
-    const { data: insertedEvent, error: eventError } = await db
+    const { data: event, error: eventError } = await db
       .from("ledger_wallet_events")
       .insert({
         user_id: device.user_id,
@@ -78,8 +75,8 @@ Deno.serve(async (req) => {
         occurred_at: occurredAt,
         status: eventStatus,
         payload: {
-          payment_method: body.payment_method ?? "apple_pay",
-          time_source: body.time_source ?? "shortcut_trigger",
+          payment_method: body.payment_method || "apple_pay",
+          time_source: body.time_source || "shortcut_trigger",
         },
       })
       .select("id")
@@ -92,12 +89,20 @@ Deno.serve(async (req) => {
         .eq("user_id", device.user_id)
         .eq("request_id", requestId)
         .maybeSingle();
-      return json({ ok: true, duplicate: true, tx_id: duplicate?.transaction_id ?? null }, 200);
+      return send(res, 200, {
+        ok: true,
+        duplicate: true,
+        tx_id: duplicate?.transaction_id || null,
+      });
     }
     if (eventError) throw eventError;
-    if (!insertedEvent) throw new Error("Wallet event insert returned no row");
+    if (!event) throw new Error("Wallet event insert returned no row");
 
     const txStatus = amountMinor === null || !merchant ? "pending" : "confirmed";
+    const ledgerAmount = amountMinor === null
+      ? null
+      : (amountMinor < 0 ? Math.abs(amountMinor) : -amountMinor);
+
     const { data: transaction, error: txError } = await db
       .from("ledger_transactions")
       .insert({
@@ -105,11 +110,11 @@ Deno.serve(async (req) => {
         device_id: device.id,
         request_id: requestId,
         source: "apple_pay",
-        amount_minor: amountMinor === null ? null : (amountMinor < 0 ? Math.abs(amountMinor) : -amountMinor),
+        amount_minor: ledgerAmount,
         currency,
         occurred_at: occurredAt,
         merchant,
-        merchant_normalized: merchant?.toLocaleLowerCase("zh-TW") ?? null,
+        merchant_normalized: merchant?.toLocaleLowerCase("zh-TW") || null,
         card_label: card,
         status: txStatus,
       })
@@ -117,30 +122,27 @@ Deno.serve(async (req) => {
       .single();
 
     if (txError) {
-      // Keep retry semantics: if transaction persistence failed, remove this
-      // staging event so the same request_id can be retried rather than being
-      // reported as a successful duplicate with no transaction.
-      await db.from("ledger_wallet_events").delete().eq("id", insertedEvent.id);
+      await db.from("ledger_wallet_events").delete().eq("id", event.id);
       throw txError;
     }
+
     await Promise.all([
       db.from("ledger_wallet_events").update({
         status: txStatus === "confirmed" ? "processed" : "needs_review",
         transaction_id: transaction.id,
-      }).eq("id", insertedEvent.id),
+      }).eq("id", event.id),
       db.from("ledger_devices").update({
         last_seen_at: new Date().toISOString(),
       }).eq("id", device.id),
     ]);
-
-    return json({
+    return send(res, 201, {
       ok: true,
       duplicate: false,
       tx_id: transaction.id,
       status: transaction.status,
       needs_review: txStatus !== "confirmed",
-    }, 201);
+    });
   } catch (error) {
-    return errorResponse(error);
+    return handleError(res, error);
   }
-});
+}
