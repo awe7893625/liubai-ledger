@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "test:cloud-api": "node --test api/_shared/cloud.test.js",
+    "test:cloud-api": "node --test --test-concurrency=1 api/_shared/cloud.test.js api/v2/wallet/ingest.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
