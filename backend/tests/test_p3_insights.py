@@ -155,7 +155,7 @@ class TestInsights:
             assert after_categories["c_shopping"] == 12345
             assert sum(row["total_minor"] for row in after_data["category_totals"]) == after_data["total_spent_minor"]
 
-    def test_uncategorized_totals_include_null_and_empty_category_ids(self):
+    def test_uncategorized_totals_and_trend_merge_null_empty_and_sqlite_trim(self):
         from datetime import date
         from app.main import app
         from fastapi.testclient import TestClient
@@ -167,16 +167,38 @@ class TestInsights:
         with tx() as conn:
             conn.execute(
                 "INSERT INTO categories (id, user_id, name, slug) VALUES (?, ?, ?, ?)",
-                ("", "local", "未分類", "uncategorized"),
+                ("", "local", "空字串分類測試名稱", "empty-category-test"),
+            )
+            conn.execute(
+                "INSERT INTO categories (id, user_id, name, slug) VALUES (?, ?, ?, ?)",
+                ("   ", "local", "空白分類測試名稱", "space-category-test"),
             )
         _insert_tx("tx-uncategorized-empty", day, amount=-8000, merchant="uncategorized-empty", category="")
+        _insert_tx("tx-uncategorized-spaces", day, amount=-5000, merchant="uncategorized-spaces", category="   ")
+        _insert_tx("tx-food-category", day, amount=-7000, merchant="food-category", category="c_food")
 
         with TestClient(app) as c:
             insights = c.get(f"/api/insights?month={month}")
             assert insights.status_code == 200
-            row = next(r for r in insights.json()["category_totals"] if r["category_id"] == "__uncategorized__")
-            assert row["count"] == 2
-            assert row["total_minor"] == 20000
+            data = insights.json()
+            totals = data["category_totals"]
+            keys = [row["category_id"] for row in totals]
+            assert len(keys) == len(set(keys))
+
+            uncategorized = [row for row in totals if row["category_id"] == "__uncategorized__"]
+            assert len(uncategorized) == 1
+            row = uncategorized[0]
+            assert row["name"] == "未分類"
+            assert row["count"] == 3
+            assert row["total_minor"] == 25000
+
+            food = next(row for row in totals if row["category_id"] == "c_food")
+            assert food["name"] != "未分類"
+            assert food["total_minor"] == 7000
+
+            month_trend = data["category_trend"][month]
+            assert month_trend["__uncategorized__"] == row["total_minor"]
+            assert month_trend["c_food"] == food["total_minor"]
 
             transactions = c.get("/api/transactions", params={"month": month, "limit": 100})
             assert transactions.status_code == 200

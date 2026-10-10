@@ -70,11 +70,15 @@ def get_insights(month: str | None = None):
     # logic server-side prevents the mobile pie chart and desktop summary from drifting.
     category_rows = q(
         "SELECT " + _CATEGORY_KEY_SQL_T + " AS category_id, "
-        "COALESCE(c.name, '未分類') AS name, COALESCE(SUM(-t.amount), 0) AS total, COUNT(*) AS count "
+        "CASE WHEN " + _CATEGORY_KEY_SQL_T + " = '__uncategorized__' "
+        "THEN '未分類' ELSE COALESCE(c.name, '未分類') END AS name, "
+        "COALESCE(SUM(-t.amount), 0) AS total, COUNT(*) AS count "
         "FROM transactions t LEFT JOIN categories c ON c.id=t.category_id "
         "WHERE t.user_id='local' AND t.status='confirmed' AND t.amount<0 "
         "AND t.kind IN ('expense','unknown') AND t.date>=? AND t.date<=? "
-        "GROUP BY " + _CATEGORY_KEY_SQL_T + ", COALESCE(c.name, '未分類') "
+        "GROUP BY " + _CATEGORY_KEY_SQL_T + ", "
+        "CASE WHEN " + _CATEGORY_KEY_SQL_T + " = '__uncategorized__' "
+        "THEN '未分類' ELSE COALESCE(c.name, '未分類') END "
         "ORDER BY total DESC",
         start, end,
     )

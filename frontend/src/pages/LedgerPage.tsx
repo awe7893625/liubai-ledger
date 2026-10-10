@@ -736,7 +736,8 @@ export function LedgerPage() {
     () => {
       if (!categoryFilter) return items;
       if (categoryFilter === "__uncategorized__") {
-        return items.filter((tx) => !tx.category_id?.trim());
+        // Match SQLite TRIM(category_id), which removes ASCII spaces by default.
+        return items.filter((tx) => !tx.category_id?.replace(/^ +| +$/g, ""));
       }
       return items.filter((tx) => tx.category_id === categoryFilter);
     },
