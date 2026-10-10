@@ -733,7 +733,13 @@ export function LedgerPage() {
   // 直接在 items 上做前端篩選；不改 fetchPage 的抓取邏輯。visibleItems 定義必須在
   // groups/totals 之前（它們依賴它），順序別再搬動。
   const visibleItems = useMemo(
-    () => (categoryFilter ? items.filter((tx) => tx.category_id === categoryFilter) : items),
+    () => {
+      if (!categoryFilter) return items;
+      if (categoryFilter === "__uncategorized__") {
+        return items.filter((tx) => !tx.category_id?.trim());
+      }
+      return items.filter((tx) => tx.category_id === categoryFilter);
+    },
     [items, categoryFilter],
   );
 
@@ -783,6 +789,7 @@ export function LedgerPage() {
 
   const activeCategoryName = useMemo(() => {
     if (!categoryFilter) return null;
+    if (categoryFilter === "__uncategorized__") return "未分類";
     return categories.find((c) => c.id === categoryFilter)?.name ?? categoryFilter;
   }, [categoryFilter, categories]);
 

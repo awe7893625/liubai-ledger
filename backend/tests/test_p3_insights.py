@@ -155,6 +155,34 @@ class TestInsights:
             assert after_categories["c_shopping"] == 12345
             assert sum(row["total_minor"] for row in after_data["category_totals"]) == after_data["total_spent_minor"]
 
+    def test_uncategorized_totals_include_null_and_empty_category_ids(self):
+        from datetime import date
+        from app.main import app
+        from fastapi.testclient import TestClient
+
+        month = date.today().strftime("%Y-%m")
+        day = f"{month}-03"
+        _insert_tx("tx-uncategorized-null", day, amount=-12000, merchant="uncategorized-null")
+        from app.db import tx
+        with tx() as conn:
+            conn.execute(
+                "INSERT INTO categories (id, user_id, name, slug) VALUES (?, ?, ?, ?)",
+                ("", "local", "未分類", "uncategorized"),
+            )
+        _insert_tx("tx-uncategorized-empty", day, amount=-8000, merchant="uncategorized-empty", category="")
+
+        with TestClient(app) as c:
+            insights = c.get(f"/api/insights?month={month}")
+            assert insights.status_code == 200
+            row = next(r for r in insights.json()["category_totals"] if r["category_id"] == "__uncategorized__")
+            assert row["count"] == 2
+            assert row["total_minor"] == 20000
+
+            transactions = c.get("/api/transactions", params={"month": month, "limit": 100})
+            assert transactions.status_code == 200
+            returned_ids = {tx["id"] for tx in transactions.json()}
+            assert {"tx-uncategorized-null", "tx-uncategorized-empty"} <= returned_ids
+
     def test_pending_and_transfer_rows_do_not_pollute_analytics(self):
         from datetime import date
         from app.db import tx

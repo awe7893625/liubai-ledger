@@ -10,6 +10,12 @@ from app.db import q
 
 router = APIRouter(prefix="/api/insights", tags=["insights"])
 
+_CATEGORY_KEY_SQL = (
+    "CASE WHEN category_id IS NULL OR TRIM(category_id) = '' "
+    "THEN '__uncategorized__' ELSE category_id END"
+)
+_CATEGORY_KEY_SQL_T = _CATEGORY_KEY_SQL.replace("category_id", "t.category_id")
+
 
 def _valid_month(m: str) -> bool:
     if len(m) != 7 or m[4] != "-":
@@ -63,12 +69,12 @@ def get_insights(month: str | None = None):
     # inclusion rule as budget/overview: confirmed expense rows only. Keeping this
     # logic server-side prevents the mobile pie chart and desktop summary from drifting.
     category_rows = q(
-        "SELECT COALESCE(t.category_id, '__uncategorized__') AS category_id, "
+        "SELECT " + _CATEGORY_KEY_SQL_T + " AS category_id, "
         "COALESCE(c.name, '未分類') AS name, COALESCE(SUM(-t.amount), 0) AS total, COUNT(*) AS count "
         "FROM transactions t LEFT JOIN categories c ON c.id=t.category_id "
         "WHERE t.user_id='local' AND t.status='confirmed' AND t.amount<0 "
         "AND t.kind IN ('expense','unknown') AND t.date>=? AND t.date<=? "
-        "GROUP BY COALESCE(t.category_id, '__uncategorized__'), COALESCE(c.name, '未分類') "
+        "GROUP BY " + _CATEGORY_KEY_SQL_T + ", COALESCE(c.name, '未分類') "
         "ORDER BY total DESC",
         start, end,
     )
@@ -86,11 +92,11 @@ def get_insights(month: str | None = None):
     category_trend = {}
     for m in months:
         rows = q(
-            "SELECT COALESCE(category_id, '__uncategorized__') AS category_id, "
+            "SELECT " + _CATEGORY_KEY_SQL + " AS category_id, "
             "COALESCE(SUM(-amount), 0) AS total "
             "FROM transactions WHERE user_id='local' AND status='confirmed' "
             "AND amount<0 AND kind IN ('expense','unknown') "
-            "AND date LIKE ? GROUP BY COALESCE(category_id, '__uncategorized__')",
+            "AND date LIKE ? GROUP BY " + _CATEGORY_KEY_SQL,
             f"{m}-%",
         )
         category_trend[m] = {r["category_id"]: int(r["total"]) for r in rows}
