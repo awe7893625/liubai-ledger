@@ -43,6 +43,7 @@ def main() -> int:
     parser.add_argument("--env-file", required=True)
     parser.add_argument("--expected-project-ref", required=True)
     parser.add_argument("--app-url", required=True)
+    parser.add_argument("--browser", action="store_true")
     args = parser.parse_args()
     env = dotenv_values(args.env_file)
     api = str(env["SUPABASE_URL"]).rstrip("/")
@@ -124,6 +125,35 @@ def main() -> int:
             expected=(401,),
         )
         print("PASS old password and old recovery code are rejected after rotation")
+
+        if args.browser:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch(headless=True)
+                try:
+                    for width in (390, 1280):
+                        context = browser.new_context(viewport={"width": width, "height": 900})
+                        page = context.new_page()
+                        errors = []
+                        page.on("pageerror", lambda exc: errors.append(type(exc).__name__))
+                        page.goto(app + "/connect", wait_until="networkidle", timeout=60_000)
+                        page.get_by_label("帳號名稱", exact=True).fill(username)
+                        page.get_by_label("密碼", exact=True).fill(new_password)
+                        page.get_by_role("button", name="登入", exact=True).last.click()
+                        page.get_by_role("heading", name="先記一筆，確認你的私人帳本已建立", exact=True).wait_for(timeout=30_000)
+                        marker = f"QA Public Auth {width}"
+                        page.get_by_label("金額", exact=True).fill("42")
+                        page.get_by_label("商家 / 項目", exact=True).fill(marker)
+                        page.get_by_role("button", name="加入帳本", exact=True).click()
+                        page.get_by_text(marker, exact=True).wait_for(timeout=30_000)
+                        assert not errors, f"browser errors: {errors}"
+                        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "horizontal overflow"
+                        page.get_by_role("button", name="登出", exact=True).click()
+                        page.get_by_role("heading", name="登入 Ledger", exact=True).wait_for(timeout=30_000)
+                        context.close()
+                        print(f"PASS {width}px browser login, manual transaction, render, and sign-out")
+                finally:
+                    browser.close()
         return 0
     finally:
         if user_id:
