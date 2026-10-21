@@ -12,10 +12,11 @@
 
 本 repo 另包含一條與私人 M4 Ledger 完全隔離的 multi-tenant Cloud 路徑。部署獨立 Supabase + Vercel 後，使用者可從 `/connect`：
 
-- 以 Email magic link 建立自己的免費帳本；
+- 以帳號名稱＋密碼建立免費帳本，不需要 Email；
 - 立即手動記帳，不需要先裝任何桌面程式；
 - 建立自己的預設帳戶／分類；
 - 選擇性配對 iPhone，使用 device-scoped token 寫入 Wallet 交易；
+- 建帳時取得一次性復原碼；忘記密碼時可重設並自動輪替復原碼；
 - 只讀取自己的資料；所有 tenant-owned table 都以 Supabase RLS 依 `auth.uid()` 隔離。
 
 Cloud API 不接受使用者自行指定 `user_id`。瀏覽器 session 與 iPhone device token 權限分離；device token 只能 ingest，不能讀取帳本或管理帳號。Cloud migration、API 與 release gate 見 [cloud/README.md](cloud/README.md)。

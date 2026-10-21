@@ -28,10 +28,11 @@ Functions or the Supabase CLI.
 ## User path
 
 1. Open `/connect` on iPhone or desktop.
-2. Sign in with Supabase passwordless email.
-3. The app bootstraps a free profile, default accounts and categories.
-4. The user can record a manual transaction immediately.
-5. Optional iPhone automation:
+2. Create or sign in with a public username + password. Supabase Auth still owns password hashing and sessions; Ledger never stores plaintext passwords.
+3. New accounts receive a one-time high-entropy recovery code. Recovery rotates both the password and the recovery code without requiring SMTP.
+4. The app bootstraps a free profile, default accounts and categories.
+5. The user can record a manual transaction immediately.
+6. Optional iPhone automation:
    - install the single `留白自動記帳` Shortcut;
    - tap **連接這支 iPhone**;
    - the site creates a 10-minute opaque pairing ticket and opens the installed
@@ -42,7 +43,7 @@ Functions or the Supabase CLI.
    - the user creates one Wallet **Transaction** automation, selects cards,
      maps `amount`, `merchant`, and `card` into a Dictionary, and runs the
      Shortcut.
-6. Supported Wallet taps post to `/api/v2/wallet/ingest`.
+7. Supported Wallet taps post to `/api/v2/wallet/ingest`.
 
 The user never copies an API URL, JSON body, bearer token, bank password, or
 Apple ID credential.
@@ -73,6 +74,8 @@ Tables:
 - `ledger_profiles`
 - `ledger_accounts`
 - `ledger_categories`
+- `ledger_recovery_codes` (server-only)
+- `ledger_auth_attempts` (server-only rate-limit buckets)
 
 `(user_id, request_id)` is unique for wallet events and transactions. Missing
 amount or merchant is retained as `pending / needs_review` instead of silently
@@ -82,6 +85,11 @@ dropping the event.
 
 Canonical handlers live under `frontend/api/v2`:
 
+- `POST /api/v2/auth/signup` — public rate-limited username/password signup;
+  creates a Supabase Auth user and returns the recovery code once.
+- `POST /api/v2/auth/login` — public rate-limited username/password login.
+- `POST /api/v2/auth/recover` — public rate-limited recovery-code password reset;
+  rotates the recovery code after successful use.
 - `POST /api/v2/bootstrap` — authenticated, idempotently creates the free
   tenant profile plus starter accounts/categories.
 - `POST|PATCH|DELETE /api/v2/transactions` — authenticated manual transaction
