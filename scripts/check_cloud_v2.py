@@ -16,13 +16,21 @@ def check(condition: bool, message: str) -> None:
 
 
 migration = (ROOT / "cloud/supabase/migrations/202609230001_cloud_v2.sql").read_text()
+saas_migration = (ROOT / "cloud/supabase/migrations/202610210001_saas_core.sql").read_text()
 for table in ("ledger_pair_tickets", "ledger_devices", "ledger_wallet_events", "ledger_transactions"):
     check(f"create table if not exists public.{table}" in migration, f"missing {table}")
     check(f"alter table public.{table} enable row level security" in migration, f"RLS missing {table}")
 
+for table in ("ledger_profiles", "ledger_accounts", "ledger_categories"):
+    check(f"create table if not exists public.{table}" in saas_migration, f"missing SaaS table {table}")
+    check(f"alter table public.{table} enable row level security" in saas_migration, f"RLS missing SaaS table {table}")
+
 check("grant insert" not in migration.lower(), "browser role must not receive INSERT")
+check("grant insert" not in saas_migration.lower(), "SaaS browser role must not receive INSERT")
 check("revoke all on public.ledger_pair_tickets from anon, authenticated" in migration, "pair ticket grants not revoked")
+check("revoke all on public.ledger_accounts from anon, authenticated" in saas_migration, "account grants not revoked")
 check("unique (user_id, request_id)" in migration, "idempotency unique key missing")
+check("user_id = auth.uid()" in saas_migration, "SaaS RLS ownership predicate missing")
 shortcut = plistlib.loads((ROOT / "shortcuts/src/Liubai-Cloud.plist").read_bytes())
 raw = json.dumps(shortcut, ensure_ascii=False)
 check(shortcut.get("WFWorkflowName") == "留白自動記帳", "wrong cloud shortcut name")
@@ -40,6 +48,9 @@ check("PROJECT.vercel.app" not in raw, "Cloud Shortcut still contains release pl
 check(not (ROOT / "cloud/supabase/functions").exists(), "duplicate Supabase Edge Functions backend still present")
 
 for endpoint in (
+    "frontend/api/v2/health.js",
+    "frontend/api/v2/bootstrap.js",
+    "frontend/api/v2/transactions.js",
     "frontend/api/v2/pair/start.js",
     "frontend/api/v2/pair/exchange.js",
     "frontend/api/v2/wallet/ingest.js",
@@ -61,6 +72,7 @@ if errors:
 
 print("PASS cloud-v2 static gate")
 print(" - isolated tables + RLS/grants")
+print(" - multi-tenant free SaaS core + server-mediated writes")
 print(" - device-scoped Shortcut credential")
 print(" - no legacy token/location")
 print(" - portable gate: no machine-specific paths or secrets")

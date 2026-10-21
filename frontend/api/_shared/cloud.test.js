@@ -20,6 +20,7 @@ test("normalize merchant without inventing a value", () => {
   assert.equal(normalizedMerchant("  7-ELEVEN   信義店 "), "7-ELEVEN 信義店");
   assert.equal(normalizedMerchant("  "), null);
   assert.equal(normalizedMerchant(null), null);
+  assert.equal(normalizedMerchant("x".repeat(300))?.length, 240);
 });
 
 test("sha256 helper is deterministic", () => {

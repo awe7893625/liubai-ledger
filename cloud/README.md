@@ -1,9 +1,11 @@
-# Liubai Ledger Cloud v2
+# Liubai Ledger Cloud SaaS beta
 
-Cloud v2 is an isolated candidate for people who want Apple Pay auto-bookkeeping
-without keeping a Mac, Tailscale, or FastAPI server online. It does **not**
-replace or migrate the legacy FastAPI/SQLite ledger and it does not change the
-legacy `/api/wallet` contract.
+Cloud is the isolated multi-tenant SaaS candidate for people who want a free
+Ledger account without keeping a Mac, Tailscale, or FastAPI server online.
+Signed-in users can create manual transactions immediately and may optionally
+pair an iPhone for Wallet ingestion. It does **not** replace or migrate the
+legacy FastAPI/SQLite ledger and it does not change the legacy `/api/wallet`
+contract.
 
 ## Architecture
 
@@ -20,25 +22,30 @@ Supabase Auth + Postgres
 ```
 
 Vercel owns the application/API runtime. Supabase owns authentication and the
-isolated Cloud v2 database. There is no production dependency on Supabase Edge
+isolated Cloud database. There is no production dependency on Supabase Edge
 Functions or the Supabase CLI.
+
 ## User path
 
-1. Open `/connect` on iPhone.
+1. Open `/connect` on iPhone or desktop.
 2. Sign in with Supabase passwordless email.
-3. Install the single `留白自動記帳` Shortcut.
-4. Tap **連接這支 iPhone**.
-5. The site creates a 10-minute opaque pairing ticket and opens the installed
-   Shortcut through Apple's `shortcuts://x-callback-url` scheme.
-6. The Shortcut exchanges the ticket at `/api/v2/pair/exchange` for a
-   device-scoped token and stores it under
-   `Shortcuts/LiubaiLedger/device-token.txt`.
-7. The user creates one Wallet **Transaction** automation, selects cards,
-   maps `amount`, `merchant`, and `card` into a Dictionary, and runs the
-   Shortcut.
-8. Future Apple Pay taps post to `/api/v2/wallet/ingest`.
+3. The app bootstraps a free profile, default accounts and categories.
+4. The user can record a manual transaction immediately.
+5. Optional iPhone automation:
+   - install the single `留白自動記帳` Shortcut;
+   - tap **連接這支 iPhone**;
+   - the site creates a 10-minute opaque pairing ticket and opens the installed
+     Shortcut through Apple's `shortcuts://x-callback-url` scheme;
+   - the Shortcut exchanges the ticket at `/api/v2/pair/exchange` for a
+     device-scoped token and stores it under
+     `Shortcuts/LiubaiLedger/device-token.txt`;
+   - the user creates one Wallet **Transaction** automation, selects cards,
+     maps `amount`, `merchant`, and `card` into a Dictionary, and runs the
+     Shortcut.
+6. Supported Wallet taps post to `/api/v2/wallet/ingest`.
 
-The user never copies an API URL, JSON body, or bearer token.
+The user never copies an API URL, JSON body, bearer token, bank password, or
+Apple ID credential.
 ## Security principals
 
 Cloud v2 separates browser identity and ingestion identity.
@@ -63,6 +70,9 @@ Tables:
 - `ledger_devices`
 - `ledger_wallet_events`
 - `ledger_transactions`
+- `ledger_profiles`
+- `ledger_accounts`
+- `ledger_categories`
 
 `(user_id, request_id)` is unique for wallet events and transactions. Missing
 amount or merchant is retained as `pending / needs_review` instead of silently
@@ -72,6 +82,10 @@ dropping the event.
 
 Canonical handlers live under `frontend/api/v2`:
 
+- `POST /api/v2/bootstrap` — authenticated, idempotently creates the free
+  tenant profile plus starter accounts/categories.
+- `POST|PATCH|DELETE /api/v2/transactions` — authenticated manual transaction
+  mutations, always scoped from the server-validated user session.
 - `POST /api/v2/pair/start` — authenticated user creates one ticket.
 - `POST /api/v2/pair/exchange` — public-by-ticket, returns device token once.
 - `POST /api/v2/wallet/ingest` — public-by-device-token, validates and dedupes.

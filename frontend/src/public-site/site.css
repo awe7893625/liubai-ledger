@@ -2861,6 +2861,60 @@
 .ls-connect-card > .ls-button {
   margin-top: 18px;
 }
+.ls-manual-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.ls-manual-grid label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.ls-manual-grid label > span {
+  color: var(--ls-faint);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.ls-manual-grid input,
+.ls-manual-grid select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--ls-strong);
+  border-radius: 13px;
+  padding: 12px 13px;
+  background: var(--ls-bg);
+  color: var(--ls-text);
+  font: inherit;
+}
+.ls-manual-wide {
+  grid-column: span 2;
+}
+.ls-icon-button {
+  margin-top: 8px;
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ls-faint);
+  cursor: pointer;
+}
+.ls-icon-button:hover {
+  background: var(--ls-soft);
+  color: #a23f35;
+}
+.ls-icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.ls-cloud-tx-main {
+  min-width: 0;
+}
 .ls-connect-card small {
   display: block;
   margin-top: 10px;
@@ -2923,8 +2977,12 @@
     border-radius: 20px;
   }
   .ls-connect-grid,
-  .ls-connect-form {
+  .ls-connect-form,
+  .ls-manual-grid {
     grid-template-columns: 1fr;
+  }
+  .ls-manual-wide {
+    grid-column: auto;
   }
   .ls-connect-icon {
     position: static;

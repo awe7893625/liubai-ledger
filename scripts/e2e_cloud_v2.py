@@ -85,6 +85,7 @@ def main() -> int:
     )
     assert isinstance(created, dict) and created.get("id")
     user_id = str(created["id"])
+    second_user_id: str | None = None
 
     try:
         _, login = request(
@@ -98,6 +99,54 @@ def main() -> int:
         access = str(login["access_token"])
         user_headers = {"apikey": anon, "Authorization": f"Bearer {access}"}
         app_user_headers = {"Authorization": f"Bearer {access}"}
+
+        _, bootstrap = request(
+            "POST",
+            f"{app}/api/v2/bootstrap",
+            headers=app_user_headers,
+            body={},
+            expected=(200,),
+        )
+        assert isinstance(bootstrap, dict) and bootstrap.get("ok") is True
+        accounts = bootstrap.get("accounts") or []
+        categories = bootstrap.get("categories") or []
+        assert len(accounts) >= 2
+        assert len(categories) >= 8
+        default_account_id = str(accounts[0]["id"])
+        default_category_id = str(categories[0]["id"])
+
+        manual_body = {
+            "request_id": "e2e-manual-request",
+            "amount": "321.50",
+            "merchant": "E2E Manual Lunch",
+            "account_id": default_account_id,
+            "category_id": default_category_id,
+            "occurred_at": "2026-10-21T12:30:00+08:00",
+            "note": "manual SaaS e2e",
+        }
+        _, manual = request(
+            "POST",
+            f"{app}/api/v2/transactions",
+            headers=app_user_headers,
+            body=manual_body,
+            expected=(201,),
+        )
+        assert isinstance(manual, dict) and manual.get("ok") is True
+        assert manual.get("duplicate") is False
+        manual_tx = manual["transaction"]
+        assert manual_tx["amount_minor"] == -32150
+        assert manual_tx["merchant"] == "E2E Manual Lunch"
+        manual_tx_id = str(manual_tx["id"])
+
+        _, manual_replay = request(
+            "POST",
+            f"{app}/api/v2/transactions",
+            headers=app_user_headers,
+            body=manual_body,
+            expected=(200,),
+        )
+        assert isinstance(manual_replay, dict) and manual_replay.get("duplicate") is True
+        assert str(manual_replay["transaction"]["id"]) == manual_tx_id
 
         _, pair = request(
             "POST",
@@ -168,6 +217,38 @@ def main() -> int:
         assert rows[0]["merchant"] == "E2E Coffee"
         assert rows[0]["status"] == "confirmed"
 
+        second_email = f"ledger-e2e-tenant-{secrets.token_hex(5)}@example.invalid"
+        second_password = "E2e!" + secrets.token_urlsafe(18)
+        _, second_created = request(
+            "POST",
+            f"{api}/auth/v1/admin/users",
+            headers=admin_headers,
+            body={"email": second_email, "password": second_password, "email_confirm": True},
+            expected=(200, 201),
+        )
+        assert isinstance(second_created, dict) and second_created.get("id")
+        second_user_id = str(second_created["id"])
+        _, second_login = request(
+            "POST",
+            f"{api}/auth/v1/token?grant_type=password",
+            headers=public_headers,
+            body={"email": second_email, "password": second_password},
+            expected=(200,),
+        )
+        assert isinstance(second_login, dict) and second_login.get("access_token")
+        second_headers = {
+            "apikey": anon,
+            "Authorization": f"Bearer {second_login['access_token']}",
+        }
+        _, second_rows = request(
+            "GET",
+            f"{api}/rest/v1/ledger_transactions?select=id,merchant",
+            headers=second_headers,
+            expected=(200,),
+        )
+        assert isinstance(second_rows, list)
+        assert all(row.get("id") not in {tx_id, manual_tx_id} for row in second_rows)
+
         request(
             "POST",
             f"{app}/api/v2/devices",
@@ -192,15 +273,23 @@ def main() -> int:
         _ = forbidden
 
         print("PASS cloud-v2 local E2E")
-        print(" - auth session")
+        print(" - auth session + tenant bootstrap")
+        print(" - manual transaction + exact duplicate")
         print(" - single-use pairing ticket")
         print(" - device token exchange")
         print(" - wallet ingest + exact duplicate")
-        print(" - tenant read via RLS")
+        print(" - cross-tenant RLS isolation")
         print(" - device revoke blocks future ingest")
         print(" - pair-ticket table not readable by browser role")
         return 0
     finally:
+        if second_user_id:
+            request(
+                "DELETE",
+                f"{api}/auth/v1/admin/users/{second_user_id}",
+                headers=admin_headers,
+                expected=(200, 204),
+            )
         request(
             "DELETE",
             f"{api}/auth/v1/admin/users/{user_id}",

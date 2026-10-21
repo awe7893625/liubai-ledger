@@ -772,7 +772,7 @@ export function PublicSite() {
                 自架版安裝 <ArrowRight size={17} />
               </a>
               <a className="ls-button ls-secondary" href="/connect">
-                不用電腦 · Cloud v2 <Smartphone size={16} />
+                免費雲端 Beta <Smartphone size={16} />
               </a>
               <a className="ls-button ls-secondary" href="#preview">
                 先看看畫面 <ArrowDown size={16} />
@@ -783,7 +783,7 @@ export function PublicSite() {
                 <ShieldCheck size={15} /> 不需要銀行帳密
               </span>
               <span>
-                <Server size={15} /> 帳本在自己的主機
+                <Server size={15} /> 可自架，也可用隔離雲端帳本
               </span>
             </div>
             <p className="ls-hero-footnote">

@@ -84,7 +84,7 @@ export function normalizeAmount(value) {
 export function normalizedMerchant(value) {
   if (typeof value !== "string") return null;
   const clean = value.trim().replace(/\s+/g, " ");
-  return clean || null;
+  return clean ? clean.slice(0, 240) : null;
 }
 
 export function safeCurrency(value) {

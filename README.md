@@ -6,7 +6,21 @@
 
 [產品網站](https://liubai-ledger.vercel.app) · [互動帳本示範](https://liubai-ledger.vercel.app/demo) · [畫面導覽](https://liubai-ledger.vercel.app/#preview) · [捷徑安裝](https://liubai-ledger.vercel.app/#shortcuts) · [iPhone 自動化教學](https://liubai-ledger.vercel.app/#automation)
 
-喜歡這個小工具，歡迎在本頁右上角按 **Star**。公開網站是展示與教學，不會接收你的交易，也不連到作者的私人帳本。
+喜歡這個小工具，歡迎在本頁右上角按 **Star**。公開展示頁本身不會接收你的交易，也不連到作者的私人帳本。
+
+## 免費雲端 SaaS Beta
+
+本 repo 另包含一條與私人 M4 Ledger 完全隔離的 multi-tenant Cloud 路徑。部署獨立 Supabase + Vercel 後，使用者可從 `/connect`：
+
+- 以 Email magic link 建立自己的免費帳本；
+- 立即手動記帳，不需要先裝任何桌面程式；
+- 建立自己的預設帳戶／分類；
+- 選擇性配對 iPhone，使用 device-scoped token 寫入 Wallet 交易；
+- 只讀取自己的資料；所有 tenant-owned table 都以 Supabase RLS 依 `auth.uid()` 隔離。
+
+Cloud API 不接受使用者自行指定 `user_id`。瀏覽器 session 與 iPhone device token 權限分離；device token 只能 ingest，不能讀取帳本或管理帳號。Cloud migration、API 與 release gate 見 [cloud/README.md](cloud/README.md)。
+
+自架版仍維持 FastAPI + SQLite，兩條路互不覆蓋，也不會自動把作者的私人 Ledger 搬上雲端。
 
 ## 畫面
 

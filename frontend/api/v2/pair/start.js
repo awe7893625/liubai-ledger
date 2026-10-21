@@ -1,6 +1,7 @@
 import {
   adminClient,
   handleError,
+  httpError,
   randomToken,
   requireUser,
   send,
@@ -17,6 +18,17 @@ export default async function handler(req, res) {
     const user = await requireUser(req);
     const db = adminClient();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const { data: activeDevices, error: deviceListError } = await db
+      .from("ledger_devices")
+      .select("id")
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .limit(6);
+    if (deviceListError) throw deviceListError;
+    if ((activeDevices || []).length >= 5) {
+      throw httpError(429, "Free plan allows up to 5 active devices");
+    }
 
     const { error: deleteError } = await db
       .from("ledger_pair_tickets")
