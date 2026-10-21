@@ -2,11 +2,11 @@
 
 ## Release decision
 
-**Not ready for public registration.** The Supabase Marketplace terms gate is
-resolved. Hosted database provisioning and migration completed. A new Vercel
-production deployment was explicitly BLOCKED by commit-author/team verification.
-No access policy was relaxed, no author identity was rewritten, and no attempt
-was made to publish via an alternative route around that block.
+**Production runtime is deployed and core SaaS acceptance passed, but public
+registration is still gated by authentication-email delivery and real iPhone
+acceptance.** The Supabase Marketplace terms gate is resolved, Tokyo database
+provisioning/migration is complete, and the isolated Vercel production alias now
+serves the multi-tenant Cloud build with a healthy database connection.
 
 ## Completed in this run
 
@@ -22,15 +22,23 @@ was made to publish via an alternative route around that block.
   tenants only, with cleanup, explicit project identity checks and redacted output.
 - Fixed the Vercel SPA fallback rewriting Vite module URLs to HTML in local dev.
   API 404 behavior stays fail-closed; module paths do not become SPA documents.
+- Found the isolated Vercel preview project had been connected to the wrong GitHub
+  repository (`awe7893625/pikmin-architect`). That connection was removed. Direct
+  GitHub reconnection to `awe7893625/liubai-ledger` was unavailable to the current
+  Vercel Git integration, so the successful production release used Vercel's
+  authenticated manual CLI deployment from a clean Git archive. No repository
+  permission or author identity was rewritten.
+- Production deployment `dpl_6251dRj6MDHdU7fh1kWvDFauvuGc` reached READY and
+  was aliased to `https://liubai-ledger-cloud-v2-preview.vercel.app`.
 
 ## What was actually tested
 
-The accepted test path was **loopback Vercel API runtime + the real hosted Tokyo
-Supabase database**, not a deployed Vercel production runtime. The runner records
-`runtime=loopback_with_hosted_db` so these results cannot be mistaken for a live
-production acceptance.
+Two acceptance passes were run. The first used **loopback Vercel API runtime +
+the real hosted Tokyo Supabase database**. After the production deployment was
+READY, the same suite was rerun against the actual HTTPS production alias. The
+final production report records `runtime=hosted`.
 
-The final rerun passed 11 checks:
+The final production run passed 11 checks:
 
 1. API health / hosted database connectivity.
 2. Two new synthetic users authenticate against hosted Supabase.
@@ -51,21 +59,25 @@ auth-user and transaction counts were both zero. No private M4 Ledger was touche
 Local evidence is in the ignored `.qa/` directory:
 - `cloud-migrations-20261021.json`
 - `hosted-db-e2e-20261021.json` (initial browser failure, preserved)
-- `hosted-db-e2e-20261021-retest.json` (11 checks PASS)
+- `hosted-db-e2e-20261021-retest.json` (loopback runtime + hosted DB PASS)
+- `hosted-production-acceptance-20261021.json` (actual HTTPS production PASS)
 - `cloud-synthetic-390.png` and `cloud-synthetic-1280.png`
+
+After the production acceptance cleanup, the hosted project was verified to have
+zero synthetic auth users, transactions, devices and wallet events.
 
 ## Remaining release gates
 
-- Resolve commit-author access through the actual owner's verified Git/Vercel
-  account connection. Vercel returned `TEAM_ACCESS_REQUIRED` and explicitly
-  reported the commit author lacked deployment permission. Keep the PR draft.
-- Redeploy with the new Supabase environment and run the same acceptance test
-  against the actual HTTPS application URL **without** `--local-runtime`.
 - Configure and verify public authentication delivery. Default Supabase SMTP is
-  restricted to project-team addresses; synthetic admin-created users do not
-  establish that arbitrary-user signup or magic-link email delivery works.
+  restricted and synthetic admin-created users do not establish that arbitrary
+  users can receive magic-link email. Do not advertise open registration until
+  this is verified with an approved SMTP/OAuth path.
 - Verify real iPhone Shortcut import, pairing and Wallet tap automation separately.
   API pairing simulation is not real-device acceptance.
+- Restore automated Git-based deployments later by granting the Vercel Git
+  integration access to `awe7893625/liubai-ledger`; current production is valid,
+  but future releases are manual until that connection is repaired.
+- Keep the PR draft until the two gates above are complete.
 
 ## Reproduction
 
