@@ -19,6 +19,7 @@ def check(condition: bool, message: str) -> None:
 migration = (ROOT / "cloud/supabase/migrations/202609230001_cloud_v2.sql").read_text()
 saas_migration = (ROOT / "cloud/supabase/migrations/202610210001_saas_core.sql").read_text()
 auth_migration = (ROOT / "cloud/supabase/migrations/202610210002_public_beta_auth.sql").read_text()
+google_migration = (ROOT / "cloud/supabase/migrations/202610210003_google_identity.sql").read_text()
 for table in ("ledger_pair_tickets", "ledger_devices", "ledger_wallet_events", "ledger_transactions"):
     check(f"create table if not exists public.{table}" in migration, f"missing {table}")
     check(f"alter table public.{table} enable row level security" in migration, f"RLS missing {table}")
@@ -30,6 +31,10 @@ for table in ("ledger_profiles", "ledger_accounts", "ledger_categories"):
 for table in ("ledger_recovery_codes", "ledger_auth_attempts"):
     check(f"create table if not exists public.{table}" in auth_migration, f"missing auth table {table}")
     check(f"alter table public.{table} enable row level security" in auth_migration, f"RLS missing auth table {table}")
+
+check("create table if not exists public.ledger_google_identities" in google_migration, "missing Google identity mapping table")
+check("alter table public.ledger_google_identities enable row level security" in google_migration, "RLS missing Google identity table")
+check("revoke all on public.ledger_google_identities from anon, authenticated" in google_migration, "Google identity table grants not revoked")
 
 check("grant insert" not in migration.lower(), "browser role must not receive INSERT")
 check("grant insert" not in saas_migration.lower(), "SaaS browser role must not receive INSERT")
@@ -59,6 +64,7 @@ for endpoint in (
     "frontend/api/v2/auth/signup.js",
     "frontend/api/v2/auth/login.js",
     "frontend/api/v2/auth/recover.js",
+    "frontend/api/v2/auth/google.js",
     "frontend/api/v2/bootstrap.js",
     "frontend/api/v2/transactions.js",
     "frontend/api/v2/pair/start.js",
@@ -88,6 +94,7 @@ print("PASS cloud-v2 static gate")
 print(" - isolated tables + RLS/grants")
 print(" - multi-tenant free SaaS core + server-mediated writes")
 print(" - SMTP-independent beta auth + server-only recovery/rate-limit tables")
+print(" - Google ID-token auth path + server-only identity mapping")
 print(" - device-scoped Shortcut credential")
 print(" - no legacy token/location")
 print(" - portable gate: no machine-specific paths or secrets")

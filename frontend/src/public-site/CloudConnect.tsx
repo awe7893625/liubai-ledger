@@ -14,13 +14,29 @@ import {
   Trash2,
   Unplug,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
 const CLOUD_READY = Boolean(SUPABASE_URL && SUPABASE_KEY);
+const GOOGLE_WEB_CLIENT_ID = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() ?? "";
 const SHORTCUT_NAME = "留白自動記帳";
+
+type GoogleCredentialResponse = { credential?: string };
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize(options: { client_id: string; callback: (response: GoogleCredentialResponse) => void }): void;
+          renderButton(element: HTMLElement, options: Record<string, string>): void;
+        };
+      };
+    };
+  }
+}
 
 const supabase = CLOUD_READY
   ? createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -185,8 +201,9 @@ export function CloudConnect() {
   const [issuedRecoveryCode, setIssuedRecoveryCode] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [googleEnabled, setGoogleEnabled] = useState(false);
-  const [checkingProviders, setCheckingProviders] = useState(true);
+  const [googleReady, setGoogleReady] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [transactions, setTransactions] = useState<CloudTransaction[]>([]);
@@ -241,18 +258,70 @@ export function CloudConnect() {
   }, []);
 
   useEffect(() => {
-    if (!CLOUD_READY) return;
-    const controller = new AbortController();
-    void fetch(`${SUPABASE_URL}/auth/v1/settings`, {
-      headers: { apikey: SUPABASE_KEY },
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((settings) => setGoogleEnabled(Boolean(settings?.external?.google)))
-      .catch(() => setGoogleEnabled(false))
-      .finally(() => setCheckingProviders(false));
-    return () => controller.abort();
-  }, []);
+    if (!googleEnabled || !supabase || session) return;
+    let cancelled = false;
+
+    const handleGoogleCredential = async (response: GoogleCredentialResponse) => {
+      if (!response.credential || cancelled) return;
+      setBusy(true);
+      setMessage("");
+      try {
+        const data = await publicRequest<PublicAuthResponse>("/api/v2/auth/google", {
+          credential: response.credential,
+        });
+        if (!data.session) throw new Error("沒有取得 Google 登入 Session");
+        const { error } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (error) throw error;
+        setMessage("✅ 已使用 Google 登入。");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Google 登入失敗，請稍後重試。");
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    const renderGoogle = () => {
+      if (cancelled || !window.google || !googleButtonRef.current) return;
+      googleButtonRef.current.replaceChildren();
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_WEB_CLIENT_ID,
+        callback: (response) => void handleGoogleCredential(response),
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        shape: "rectangular",
+        text: "continue_with",
+        logo_alignment: "left",
+        width: "320",
+      });
+      setGoogleReady(true);
+    };
+
+    const existing = document.querySelector<HTMLScriptElement>('script[data-liubai-google="true"]');
+    if (window.google) {
+      renderGoogle();
+    } else if (existing) {
+      existing.addEventListener("load", renderGoogle, { once: true });
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.dataset.liubaiGoogle = "true";
+      script.addEventListener("load", renderGoogle, { once: true });
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      cancelled = true;
+      existing?.removeEventListener("load", renderGoogle);
+    };
+  }, [googleEnabled, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -297,20 +366,6 @@ export function CloudConnect() {
       setMessage(error instanceof Error ? error.message : "登入失敗，請稍後重試。");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    if (!supabase || !googleEnabled) return;
-    setBusy(true);
-    setMessage("");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/connect` },
-    });
-    if (error) {
-      setBusy(false);
-      setMessage("Google 登入暫時無法使用，請改用帳號密碼登入。");
     }
   };
 
@@ -487,21 +542,22 @@ export function CloudConnect() {
                 <p>{authMode === "signup" ? "免費開始，不需要綁信用卡。" : authMode === "recover" ? "使用你的復原碼設定新密碼。" : "登入後繼續使用你的 Ledger。"}</p>
               </div>
 
-              <button
-                className="ls-google-button"
-                type="button"
-                disabled={busy || checkingProviders || !googleEnabled}
-                onClick={() => void signInWithGoogle()}
-                title={!checkingProviders && !googleEnabled ? "Google OAuth 尚未在 Supabase 啟用" : undefined}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.23-.2-1.78H12v3.43h5.52a4.77 4.77 0 0 1-2.05 3.04l-.03.11 2.98 2.31.21.02c1.93-1.78 3.04-4.4 3.04-7.13Z"/>
-                  <path fill="#34A853" d="M12 22c2.7 0 4.97-.89 6.63-2.43l-3.16-2.44c-.85.58-1.98.98-3.47.98-2.61 0-4.82-1.76-5.61-4.2l-.11.01-3.1 2.4-.04.1A10 10 0 0 0 12 22Z"/>
-                  <path fill="#FBBC05" d="M6.39 13.91A6.04 6.04 0 0 1 6.06 12c0-.66.12-1.3.32-1.91l-.01-.13-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.14 4.43l3.25-2.52Z"/>
-                  <path fill="#EA4335" d="M12 5.89c1.88 0 3.15.81 3.88 1.49l2.81-2.75C16.96 3.02 14.7 2 12 2a10 10 0 0 0-8.86 5.57l3.24 2.52C7.18 7.65 9.39 5.89 12 5.89Z"/>
-                </svg>
-                {checkingProviders ? "檢查 Google 登入…" : googleEnabled ? "使用 Google 繼續" : "Google 登入尚未啟用"}
-              </button>
+              {googleEnabled ? (
+                <div className="ls-google-button-shell" data-ready={googleReady} aria-busy={!googleReady || busy}>
+                  {!googleReady ? <span className="ls-google-placeholder">載入 Google 登入…</span> : null}
+                  <div ref={googleButtonRef} className="ls-google-render" aria-label="使用 Google 繼續" />
+                </div>
+              ) : (
+                <button className="ls-google-button" type="button" disabled title="Google OAuth Client 尚未建立">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.23-.2-1.78H12v3.43h5.52a4.77 4.77 0 0 1-2.05 3.04l-.03.11 2.98 2.31.21.02c1.93-1.78 3.04-4.4 3.04-7.13Z"/>
+                    <path fill="#34A853" d="M12 22c2.7 0 4.97-.89 6.63-2.43l-3.16-2.44c-.85.58-1.98.98-3.47.98-2.61 0-4.82-1.76-5.61-4.2l-.11.01-3.1 2.4-.04.1A10 10 0 0 0 12 22Z"/>
+                    <path fill="#FBBC05" d="M6.39 13.91A6.04 6.04 0 0 1 6.06 12c0-.66.12-1.3.32-1.91l-.01-.13-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.14 4.43l3.25-2.52Z"/>
+                    <path fill="#EA4335" d="M12 5.89c1.88 0 3.15.81 3.88 1.49l2.81-2.75C16.96 3.02 14.7 2 12 2a10 10 0 0 0-8.86 5.57l3.24 2.52C7.18 7.65 9.39 5.89 12 5.89Z"/>
+                  </svg>
+                  Google 登入設定中
+                </button>
+              )}
 
               <div className="ls-auth-divider"><span>或使用帳號密碼</span></div>
 
