@@ -185,6 +185,8 @@ export function CloudConnect() {
   const [issuedRecoveryCode, setIssuedRecoveryCode] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [checkingProviders, setCheckingProviders] = useState(true);
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [transactions, setTransactions] = useState<CloudTransaction[]>([]);
@@ -239,6 +241,20 @@ export function CloudConnect() {
   }, []);
 
   useEffect(() => {
+    if (!CLOUD_READY) return;
+    const controller = new AbortController();
+    void fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: SUPABASE_KEY },
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((settings) => setGoogleEnabled(Boolean(settings?.external?.google)))
+      .catch(() => setGoogleEnabled(false))
+      .finally(() => setCheckingProviders(false));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     if (!session) return;
     void loadCloudData().catch(() => setMessage("目前無法讀取雲端帳本資料。"));
   }, [session, loadCloudData]);
@@ -281,6 +297,20 @@ export function CloudConnect() {
       setMessage(error instanceof Error ? error.message : "登入失敗，請稍後重試。");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    if (!supabase || !googleEnabled) return;
+    setBusy(true);
+    setMessage("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/connect` },
+    });
+    if (error) {
+      setBusy(false);
+      setMessage("Google 登入暫時無法使用，請改用帳號密碼登入。");
     }
   };
 
@@ -422,107 +452,136 @@ export function CloudConnect() {
           ) : null}
         </header>
 
-        <div className="ls-connect-card ls-connect-hero">
-          <span className="ls-connect-icon"><Cloud size={24} /></span>
-          <p className="ls-eyebrow">Free beta · multi-tenant</p>
-          <h1>你的帳本，不需要一台電腦永遠開著。</h1>
-          <p className="ls-connect-lead">
-            免費建立自己的雲端 Ledger。手動記帳立即可用；iPhone 配對後，再把支援的 Wallet 交易自動送進同一個帳本。
-          </p>
-          <div className="ls-connect-trust">
-            <span><ShieldCheck size={16} /> 每位使用者資料由 RLS 隔離</span>
-            <span><Smartphone size={16} /> 裝置憑證可獨立撤銷</span>
-            <span><CheckCircle2 size={16} /> 免費方案不要求銀行帳密</span>
-          </div>
-        </div>
-
         {!session ? (
-          <div className="ls-connect-card">
-            <span className="ls-step-chip">01</span>
-            <div className="ls-connect-card-head">
-              <div>
-                <p className="ls-eyebrow">No email required</p>
-                <h2>{authMode === "signup" ? "建立免費 Ledger" : authMode === "recover" ? "用復原碼重設密碼" : "登入 Ledger"}</h2>
+          <div className="ls-auth-stage">
+            <div className="ls-auth-showcase" aria-hidden="true">
+              <div className="ls-auth-showcase-copy">
+                <span className="ls-auth-kicker">留白 Ledger · Free Beta</span>
+                <h1>記帳，應該像打開一個 App 一樣簡單。</h1>
+                <p>登入後就能使用你的私人雲端帳本，之後再把 iPhone Wallet 自動記帳接進來。</p>
               </div>
-              <span className="ls-success-pill"><KeyRound size={15} /> Supabase Auth</span>
+              <div className="ls-auth-mini-app">
+                <div className="ls-auth-mini-top"><span>今天</span><span>•••</span></div>
+                <strong>NT$ 1,428</strong>
+                <small>今日支出</small>
+                <div className="ls-auth-mini-row"><span>午餐</span><b>NT$ 180</b></div>
+                <div className="ls-auth-mini-row"><span>交通</span><b>NT$ 65</b></div>
+                <div className="ls-auth-mini-row"><span>生活</span><b>NT$ 1,183</b></div>
+              </div>
+              <div className="ls-auth-proof">
+                <span><ShieldCheck size={15} /> RLS 私人資料隔離</span>
+                <span><Smartphone size={15} /> iPhone Wallet 可配對</span>
+              </div>
             </div>
-            <p>
-              Beta 目前使用帳號名稱＋密碼，不需要提供 Email。密碼只交給 Supabase Auth 處理，Ledger 不自行保存明文密碼。
-            </p>
-            <div className="ls-auth-tabs" role="tablist" aria-label="登入方式">
-              <button type="button" data-active={authMode === "login"} onClick={() => setAuthMode("login")}>登入</button>
-              <button type="button" data-active={authMode === "signup"} onClick={() => setAuthMode("signup")}>建立帳號</button>
-              <button type="button" data-active={authMode === "recover"} onClick={() => setAuthMode("recover")}>忘記密碼</button>
-            </div>
-            <div className="ls-connect-form ls-auth-form">
-              <input
-                type="text"
-                inputMode="text"
-                autoComplete="username"
-                placeholder="帳號名稱，例如 rain2026"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                aria-label="帳號名稱"
-                minLength={3}
-                maxLength={24}
-              />
-              {authMode === "recover" ? (
-                <>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    placeholder="LBR- 開頭的復原碼"
-                    value={recoveryCode}
-                    onChange={(event) => setRecoveryCode(event.target.value)}
-                    aria-label="復原碼"
-                  />
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="新密碼（至少 12 字元）"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    aria-label="新密碼"
-                    minLength={12}
-                    maxLength={128}
-                  />
-                </>
-              ) : (
-                <input
-                  type="password"
-                  autoComplete={authMode === "signup" ? "new-password" : "current-password"}
-                  placeholder="密碼（至少 12 字元）"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  aria-label="密碼"
-                  minLength={12}
-                  maxLength={128}
-                />
-              )}
-              <button
-                className="ls-button ls-primary"
-                disabled={busy || !username.trim() || (authMode === "recover" ? !recoveryCode.trim() || newPassword.length < 12 : password.length < 12)}
-                onClick={() => void authenticate()}
-              >
-                {authMode === "signup" ? "建立免費帳號" : authMode === "recover" ? "重設密碼" : "登入"}
-              </button>
-            </div>
-            {authMode === "signup" ? (
-              <p className="ls-connect-muted">帳號建立後會顯示一次性復原碼。請下載或離線保存；Beta 暫不靠 Email 找回密碼。</p>
-            ) : null}
-            {issuedRecoveryCode && !session ? (
-              <div className="ls-recovery-box">
-                <strong>新的復原碼</strong>
-                <code>{issuedRecoveryCode}</code>
-                <div className="ls-recovery-actions">
-                  <button className="ls-button ls-secondary" type="button" onClick={() => void copyRecoveryCode()}><Copy size={15} /> 複製</button>
-                  <button className="ls-button ls-secondary" type="button" onClick={downloadRecoveryCode}><Download size={15} /> 下載</button>
+
+            <div className="ls-auth-card">
+              <div className="ls-auth-card-brand">
+                <span className="ls-auth-app-icon">留</span>
+                <div>
+                  <strong>Ledger</strong>
+                  <small>你的私人記帳 App</small>
                 </div>
               </div>
-            ) : null}
+              <div className="ls-auth-title">
+                <h2>{authMode === "signup" ? "建立你的帳本" : authMode === "recover" ? "找回你的帳號" : "歡迎回來"}</h2>
+                <p>{authMode === "signup" ? "免費開始，不需要綁信用卡。" : authMode === "recover" ? "使用你的復原碼設定新密碼。" : "登入後繼續使用你的 Ledger。"}</p>
+              </div>
+
+              <button
+                className="ls-google-button"
+                type="button"
+                disabled={busy || checkingProviders || !googleEnabled}
+                onClick={() => void signInWithGoogle()}
+                title={!checkingProviders && !googleEnabled ? "Google OAuth 尚未在 Supabase 啟用" : undefined}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.23-.2-1.78H12v3.43h5.52a4.77 4.77 0 0 1-2.05 3.04l-.03.11 2.98 2.31.21.02c1.93-1.78 3.04-4.4 3.04-7.13Z"/>
+                  <path fill="#34A853" d="M12 22c2.7 0 4.97-.89 6.63-2.43l-3.16-2.44c-.85.58-1.98.98-3.47.98-2.61 0-4.82-1.76-5.61-4.2l-.11.01-3.1 2.4-.04.1A10 10 0 0 0 12 22Z"/>
+                  <path fill="#FBBC05" d="M6.39 13.91A6.04 6.04 0 0 1 6.06 12c0-.66.12-1.3.32-1.91l-.01-.13-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.14 4.43l3.25-2.52Z"/>
+                  <path fill="#EA4335" d="M12 5.89c1.88 0 3.15.81 3.88 1.49l2.81-2.75C16.96 3.02 14.7 2 12 2a10 10 0 0 0-8.86 5.57l3.24 2.52C7.18 7.65 9.39 5.89 12 5.89Z"/>
+                </svg>
+                {checkingProviders ? "檢查 Google 登入…" : googleEnabled ? "使用 Google 繼續" : "Google 登入尚未啟用"}
+              </button>
+
+              <div className="ls-auth-divider"><span>或使用帳號密碼</span></div>
+
+              <div className="ls-auth-tabs" role="tablist" aria-label="登入方式">
+                <button type="button" data-active={authMode === "login"} onClick={() => setAuthMode("login")}>登入</button>
+                <button type="button" data-active={authMode === "signup"} onClick={() => setAuthMode("signup")}>註冊</button>
+              </div>
+
+              <div className="ls-auth-form">
+                <label className="ls-auth-field">
+                  <span>帳號</span>
+                  <input
+                    type="text"
+                    inputMode="text"
+                    autoComplete="username"
+                    placeholder="例如 rain2026"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    aria-label="帳號名稱"
+                    minLength={3}
+                    maxLength={24}
+                  />
+                </label>
+                {authMode === "recover" ? (
+                  <>
+                    <label className="ls-auth-field">
+                      <span>復原碼</span>
+                      <input type="text" autoComplete="off" placeholder="LBR- 開頭的復原碼" value={recoveryCode} onChange={(event) => setRecoveryCode(event.target.value)} aria-label="復原碼" />
+                    </label>
+                    <label className="ls-auth-field">
+                      <span>新密碼</span>
+                      <input type="password" autoComplete="new-password" placeholder="至少 12 個字元" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} aria-label="新密碼" minLength={12} maxLength={128} />
+                    </label>
+                  </>
+                ) : (
+                  <label className="ls-auth-field">
+                    <span>密碼</span>
+                    <input type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder="至少 12 個字元" value={password} onChange={(event) => setPassword(event.target.value)} aria-label="密碼" minLength={12} maxLength={128} />
+                  </label>
+                )}
+                <button className="ls-button ls-primary ls-auth-submit" disabled={busy || !username.trim() || (authMode === "recover" ? !recoveryCode.trim() || newPassword.length < 12 : password.length < 12)} onClick={() => void authenticate()}>
+                  {busy ? "處理中…" : authMode === "signup" ? "建立免費帳號" : authMode === "recover" ? "重設密碼" : "登入"}
+                </button>
+              </div>
+
+              {authMode !== "signup" ? (
+                <button className="ls-auth-link" type="button" onClick={() => setAuthMode(authMode === "recover" ? "login" : "recover")}>
+                  {authMode === "recover" ? "回到登入" : "忘記密碼？"}
+                </button>
+              ) : (
+                <p className="ls-auth-note">註冊後會產生一次性復原碼，請下載或離線保存。</p>
+              )}
+
+              {issuedRecoveryCode && !session ? (
+                <div className="ls-recovery-box">
+                  <strong>新的復原碼</strong>
+                  <code>{issuedRecoveryCode}</code>
+                  <div className="ls-recovery-actions">
+                    <button className="ls-button ls-secondary" type="button" onClick={() => void copyRecoveryCode()}><Copy size={15} /> 複製</button>
+                    <button className="ls-button ls-secondary" type="button" onClick={downloadRecoveryCode}><Download size={15} /> 下載</button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="ls-auth-trust"><KeyRound size={14} /> 密碼由 Supabase Auth 處理，Ledger 不保存明文密碼</div>
+            </div>
           </div>
         ) : (
           <>
+            <div className="ls-connect-card ls-connect-hero">
+              <span className="ls-connect-icon"><Cloud size={24} /></span>
+              <p className="ls-eyebrow">Free beta · multi-tenant</p>
+              <h1>你的帳本，不需要一台電腦永遠開著。</h1>
+              <p className="ls-connect-lead">免費建立自己的雲端 Ledger。手動記帳立即可用；iPhone 配對後，再把支援的 Wallet 交易自動送進同一個帳本。</p>
+              <div className="ls-connect-trust">
+                <span><ShieldCheck size={16} /> 每位使用者資料由 RLS 隔離</span>
+                <span><Smartphone size={16} /> 裝置憑證可獨立撤銷</span>
+                <span><CheckCircle2 size={16} /> 免費方案不要求銀行帳密</span>
+              </div>
+            </div>
             {issuedRecoveryCode ? (
               <div className="ls-connect-card ls-recovery-card">
                 <span className="ls-step-chip">重要</span>
