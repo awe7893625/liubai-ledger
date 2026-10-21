@@ -6,6 +6,7 @@ import {
   normalizeAmount,
   normalizedMerchant,
   normalizeUsername,
+  requestClientIp,
   sha256Hex,
   validPassword,
 } from "../../api/_shared/cloud.js";
@@ -52,4 +53,19 @@ test("beta passwords require 12-128 characters", () => {
   assert.equal(validPassword("12345678901"), false);
   assert.equal(validPassword("correct horse battery staple"), true);
   assert.equal(validPassword("x".repeat(129)), false);
+});
+
+test("Cloudflare client IP is trusted only behind an actual Cloudflare peer", () => {
+  assert.equal(requestClientIp({ headers: {
+    "cf-connecting-ip": "203.0.113.7",
+    "x-vercel-forwarded-for": "104.16.12.34",
+  } }), "203.0.113.7");
+  assert.equal(requestClientIp({ headers: {
+    "cf-connecting-ip": "203.0.113.7",
+    "x-vercel-forwarded-for": "198.51.100.10",
+  } }), "198.51.100.10");
+  assert.equal(requestClientIp({ headers: {
+    "cf-connecting-ip": "2001:db8::7",
+    "x-vercel-forwarded-for": "2606:4700::1234",
+  } }), "2001:db8::7");
 });

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { BlockList, isIP } from "node:net";
 import { createClient } from "@supabase/supabase-js";
 
 export function setNoStore(res) {
@@ -97,14 +98,47 @@ export function validPassword(value) {
   return typeof value === "string" && value.length >= 12 && value.length <= 128;
 }
 
-export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSeconds) {
-  const forwarded = String(
-    req.headers["x-vercel-forwarded-for"] ||
-    req.headers["x-forwarded-for"] ||
-    req.headers["x-real-ip"] ||
-    "unknown",
+// Cloudflare public proxy ranges: https://www.cloudflare.com/ips/ (reviewed 2026-10-21).
+const cloudflareProxyRanges = new BlockList();
+[
+  ["173.245.48.0", 20], ["103.21.244.0", 22], ["103.22.200.0", 22],
+  ["103.31.4.0", 22], ["141.101.64.0", 18], ["108.162.192.0", 18],
+  ["190.93.240.0", 20], ["188.114.96.0", 20], ["197.234.240.0", 22],
+  ["198.41.128.0", 17], ["162.158.0.0", 15], ["104.16.0.0", 13],
+  ["104.24.0.0", 14], ["172.64.0.0", 13], ["131.0.72.0", 22],
+].forEach(([address, prefix]) => cloudflareProxyRanges.addSubnet(address, prefix, "ipv4"));
+[
+  ["2400:cb00::", 32], ["2606:4700::", 32], ["2803:f800::", 32],
+  ["2405:b500::", 32], ["2405:8100::", 32], ["2a06:98c0::", 29],
+  ["2c0f:f248::", 32],
+].forEach(([address, prefix]) => cloudflareProxyRanges.addSubnet(address, prefix, "ipv6"));
+
+function firstForwarded(value) {
+  return String(value || "").split(",")[0].trim().slice(0, 96);
+}
+
+function fromCloudflareProxy(value) {
+  const ip = firstForwarded(value);
+  const family = isIP(ip);
+  if (family === 4) return cloudflareProxyRanges.check(ip, "ipv4");
+  if (family === 6) return cloudflareProxyRanges.check(ip, "ipv6");
+  return false;
+}
+
+export function requestClientIp(req) {
+  const vercelPeer = firstForwarded(req.headers["x-vercel-forwarded-for"]);
+  const cloudflareClient = firstForwarded(req.headers["cf-connecting-ip"]);
+  if (cloudflareClient && fromCloudflareProxy(vercelPeer)) return cloudflareClient;
+  return (
+    vercelPeer ||
+    firstForwarded(req.headers["x-forwarded-for"]) ||
+    firstForwarded(req.headers["x-real-ip"]) ||
+    "unknown"
   );
-  const ip = forwarded.split(",")[0].trim().slice(0, 96) || "unknown";
+}
+
+export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSeconds) {
+  const ip = requestClientIp(req);
   const secret = secretKey();
   const bucketHash = crypto.createHmac("sha256", secret).update(`${route}:${ip}`).digest("hex");
   const now = new Date();
