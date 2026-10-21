@@ -2858,6 +2858,59 @@
   background: var(--ls-bg);
   color: var(--ls-text);
 }
+.ls-auth-form {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+.ls-auth-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  border: 1px solid var(--ls-line);
+  border-radius: 12px;
+  background: var(--ls-soft);
+}
+.ls-auth-tabs button {
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--ls-faint);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.ls-auth-tabs button[data-active="true"] {
+  background: var(--ls-paper);
+  color: var(--ls-text);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+}
+.ls-recovery-card {
+  border-color: color-mix(in srgb, var(--ls-green) 32%, var(--ls-line));
+}
+.ls-recovery-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--ls-line);
+  border-radius: 14px;
+  background: var(--ls-soft);
+}
+.ls-recovery-box code {
+  overflow-wrap: anywhere;
+  user-select: all;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+.ls-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ls-recovery-actions .ls-button {
+  margin-top: 0;
+}
 .ls-connect-card > .ls-button {
   margin-top: 18px;
 }
@@ -2978,6 +3031,7 @@
   }
   .ls-connect-grid,
   .ls-connect-form,
+  .ls-auth-form,
   .ls-manual-grid {
     grid-template-columns: 1fr;
   }

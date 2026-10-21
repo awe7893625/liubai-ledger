@@ -41,6 +41,14 @@ export function adminClient() {
   });
 }
 
+export function publicAuthClient() {
+  const key = publishableKey();
+  if (!key) throw new Error("Missing Supabase publishable key");
+  return createClient(required("SUPABASE_URL"), key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function requireUser(req) {
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) throw httpError(401, "Sign in required");
@@ -67,6 +75,49 @@ export function sha256Hex(value) {
 
 export function randomToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString("base64url");
+}
+
+export function normalizeUsername(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.normalize("NFKC").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{2,23}$/.test(normalized)) return null;
+  const reserved = new Set([
+    "admin", "administrator", "api", "auth", "billing", "help", "ledger",
+    "liubai", "login", "owner", "root", "security", "signup", "support",
+    "system", "wallet", "www",
+  ]);
+  return reserved.has(normalized) ? null : normalized;
+}
+
+export function internalAuthEmail(username) {
+  return `u-${sha256Hex(`liubai:${username}`).slice(0, 32)}@users.liubai.invalid`;
+}
+
+export function validPassword(value) {
+  return typeof value === "string" && value.length >= 12 && value.length <= 128;
+}
+
+export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSeconds) {
+  const forwarded = String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "unknown");
+  const ip = forwarded.split(",")[0].trim().slice(0, 96) || "unknown";
+  const secret = secretKey();
+  const bucketHash = crypto.createHmac("sha256", secret).update(`${route}:${ip}`).digest("hex");
+  const now = new Date();
+  const since = new Date(now.getTime() - windowSeconds * 1000).toISOString();
+  const { error: insertError } = await db.from("ledger_auth_attempts").insert({
+    route,
+    bucket_hash: bucketHash,
+    created_at: now.toISOString(),
+  });
+  if (insertError) throw insertError;
+  const { count, error: countError } = await db
+    .from("ledger_auth_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("route", route)
+    .eq("bucket_hash", bucketHash)
+    .gte("created_at", since);
+  if (countError) throw countError;
+  if ((count || 0) > maxAttempts) throw httpError(429, "Too many attempts. Try again later.");
 }
 
 export function normalizeAmount(value) {

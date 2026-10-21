@@ -18,6 +18,7 @@ def check(condition: bool, message: str) -> None:
 
 migration = (ROOT / "cloud/supabase/migrations/202609230001_cloud_v2.sql").read_text()
 saas_migration = (ROOT / "cloud/supabase/migrations/202610210001_saas_core.sql").read_text()
+auth_migration = (ROOT / "cloud/supabase/migrations/202610210002_public_beta_auth.sql").read_text()
 for table in ("ledger_pair_tickets", "ledger_devices", "ledger_wallet_events", "ledger_transactions"):
     check(f"create table if not exists public.{table}" in migration, f"missing {table}")
     check(f"alter table public.{table} enable row level security" in migration, f"RLS missing {table}")
@@ -26,8 +27,13 @@ for table in ("ledger_profiles", "ledger_accounts", "ledger_categories"):
     check(f"create table if not exists public.{table}" in saas_migration, f"missing SaaS table {table}")
     check(f"alter table public.{table} enable row level security" in saas_migration, f"RLS missing SaaS table {table}")
 
+for table in ("ledger_recovery_codes", "ledger_auth_attempts"):
+    check(f"create table if not exists public.{table}" in auth_migration, f"missing auth table {table}")
+    check(f"alter table public.{table} enable row level security" in auth_migration, f"RLS missing auth table {table}")
+
 check("grant insert" not in migration.lower(), "browser role must not receive INSERT")
 check("grant insert" not in saas_migration.lower(), "SaaS browser role must not receive INSERT")
+check("grant " not in auth_migration.lower(), "auth helper tables must remain server-only")
 check("revoke all on public.ledger_pair_tickets from anon, authenticated" in migration, "pair ticket grants not revoked")
 check("revoke all on public.ledger_accounts from anon, authenticated" in saas_migration, "account grants not revoked")
 check("unique (user_id, request_id)" in migration, "idempotency unique key missing")
@@ -50,6 +56,9 @@ check(not (ROOT / "cloud/supabase/functions").exists(), "duplicate Supabase Edge
 
 for endpoint in (
     "frontend/api/v2/health.js",
+    "frontend/api/v2/auth/signup.js",
+    "frontend/api/v2/auth/login.js",
+    "frontend/api/v2/auth/recover.js",
     "frontend/api/v2/bootstrap.js",
     "frontend/api/v2/transactions.js",
     "frontend/api/v2/pair/start.js",
@@ -78,6 +87,7 @@ if errors:
 print("PASS cloud-v2 static gate")
 print(" - isolated tables + RLS/grants")
 print(" - multi-tenant free SaaS core + server-mediated writes")
+print(" - SMTP-independent beta auth + server-only recovery/rate-limit tables")
 print(" - device-scoped Shortcut credential")
 print(" - no legacy token/location")
 print(" - portable gate: no machine-specific paths or secrets")

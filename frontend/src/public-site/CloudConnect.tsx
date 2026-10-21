@@ -2,7 +2,10 @@ import { createClient, type Session } from "@supabase/supabase-js";
 import {
   CheckCircle2,
   Cloud,
+  Copy,
   CreditCard,
+  Download,
+  KeyRound,
   Link2,
   LogOut,
   Plus,
@@ -67,6 +70,22 @@ type CloudTransaction = {
   note: string | null;
 };
 
+type AuthSessionPayload = {
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+  expires_in?: number;
+  token_type?: string;
+};
+
+type PublicAuthResponse = {
+  ok: boolean;
+  username: string;
+  session?: AuthSessionPayload;
+  recovery_code?: string;
+  error?: string;
+};
+
 type BootstrapResponse = {
   ok: boolean;
   profile: {
@@ -127,6 +146,17 @@ function sourceLabel(source: CloudTransaction["source"]): string {
   return "對帳";
 }
 
+async function publicRequest<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || `Cloud API ${response.status}`);
+  return data as T;
+}
+
 async function cloudRequest<T>(
   path: string,
   session: Session,
@@ -147,7 +177,12 @@ async function cloudRequest<T>(
 
 export function CloudConnect() {
   const [session, setSession] = useState<Session | null>(null);
-  const [email, setEmail] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "recover">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [issuedRecoveryCode, setIssuedRecoveryCode] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticket, setTicket] = useState<PairStart | null>(null);
@@ -208,19 +243,68 @@ export function CloudConnect() {
     void loadCloudData().catch(() => setMessage("目前無法讀取雲端帳本資料。"));
   }, [session, loadCloudData]);
 
-  const signIn = async () => {
-    if (!supabase || !email.trim()) return;
+  const authenticate = async () => {
+    if (!supabase || !username.trim()) return;
     setBusy(true);
     setMessage("");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/connect`,
-        shouldCreateUser: true,
-      },
-    });
-    setBusy(false);
-    setMessage(error ? "登入信寄送失敗，請稍後重試。" : "登入連結已寄出，請回到這支 iPhone 開啟。");
+    try {
+      if (authMode === "recover") {
+        const data = await publicRequest<PublicAuthResponse>("/api/v2/auth/recover", {
+          username,
+          recovery_code: recoveryCode,
+          new_password: newPassword,
+        });
+        if (!data.recovery_code) throw new Error("沒有取得新的復原碼");
+        setIssuedRecoveryCode(data.recovery_code);
+        setRecoveryCode("");
+        setNewPassword("");
+        setPassword("");
+        setAuthMode("login");
+        setMessage("✅ 密碼已更新。請保存新的復原碼，再用新密碼登入。");
+        return;
+      }
+
+      const data = await publicRequest<PublicAuthResponse>(
+        authMode === "signup" ? "/api/v2/auth/signup" : "/api/v2/auth/login",
+        { username, password },
+      );
+      if (!data.session) throw new Error("沒有取得登入 Session");
+      const { error } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+      if (error) throw error;
+      if (data.recovery_code) setIssuedRecoveryCode(data.recovery_code);
+      setPassword("");
+      setMessage(authMode === "signup" ? "✅ 免費帳本已建立。請先保存復原碼。" : "✅ 已登入。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "登入失敗，請稍後重試。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyRecoveryCode = async () => {
+    if (!issuedRecoveryCode) return;
+    try {
+      await navigator.clipboard.writeText(issuedRecoveryCode);
+      setMessage("復原碼已複製。");
+    } catch {
+      setMessage("無法自動複製，請長按復原碼手動複製。");
+    }
+  };
+
+  const downloadRecoveryCode = () => {
+    if (!issuedRecoveryCode) return;
+    const blob = new Blob([
+      `留白 Ledger 復原碼\n\n帳號：${username.trim().toLowerCase()}\n復原碼：${issuedRecoveryCode}\n\n請離線保存。此碼可重設密碼；不要分享給他人。\n`,
+    ], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "liubai-ledger-recovery.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   const submitManual = async () => {
@@ -355,25 +439,105 @@ export function CloudConnect() {
         {!session ? (
           <div className="ls-connect-card">
             <span className="ls-step-chip">01</span>
-            <h2>免費建立 Ledger</h2>
-            <p>輸入 Email 取得一次性登入連結。系統不會要求銀行帳密或 Apple ID 密碼。</p>
-            <div className="ls-connect-form">
+            <div className="ls-connect-card-head">
+              <div>
+                <p className="ls-eyebrow">No email required</p>
+                <h2>{authMode === "signup" ? "建立免費 Ledger" : authMode === "recover" ? "用復原碼重設密碼" : "登入 Ledger"}</h2>
+              </div>
+              <span className="ls-success-pill"><KeyRound size={15} /> Supabase Auth</span>
+            </div>
+            <p>
+              Beta 目前使用帳號名稱＋密碼，不需要提供 Email。密碼只交給 Supabase Auth 處理，Ledger 不自行保存明文密碼。
+            </p>
+            <div className="ls-auth-tabs" role="tablist" aria-label="登入方式">
+              <button type="button" data-active={authMode === "login"} onClick={() => setAuthMode("login")}>登入</button>
+              <button type="button" data-active={authMode === "signup"} onClick={() => setAuthMode("signup")}>建立帳號</button>
+              <button type="button" data-active={authMode === "recover"} onClick={() => setAuthMode("recover")}>忘記密碼</button>
+            </div>
+            <div className="ls-connect-form ls-auth-form">
               <input
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                aria-label="Email"
+                type="text"
+                inputMode="text"
+                autoComplete="username"
+                placeholder="帳號名稱，例如 rain2026"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                aria-label="帳號名稱"
+                minLength={3}
+                maxLength={24}
               />
-              <button className="ls-button ls-primary" disabled={busy || !email.trim()} onClick={() => void signIn()}>
-                寄登入連結
+              {authMode === "recover" ? (
+                <>
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    placeholder="LBR- 開頭的復原碼"
+                    value={recoveryCode}
+                    onChange={(event) => setRecoveryCode(event.target.value)}
+                    aria-label="復原碼"
+                  />
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="新密碼（至少 12 字元）"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    aria-label="新密碼"
+                    minLength={12}
+                    maxLength={128}
+                  />
+                </>
+              ) : (
+                <input
+                  type="password"
+                  autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                  placeholder="密碼（至少 12 字元）"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  aria-label="密碼"
+                  minLength={12}
+                  maxLength={128}
+                />
+              )}
+              <button
+                className="ls-button ls-primary"
+                disabled={busy || !username.trim() || (authMode === "recover" ? !recoveryCode.trim() || newPassword.length < 12 : password.length < 12)}
+                onClick={() => void authenticate()}
+              >
+                {authMode === "signup" ? "建立免費帳號" : authMode === "recover" ? "重設密碼" : "登入"}
               </button>
             </div>
+            {authMode === "signup" ? (
+              <p className="ls-connect-muted">帳號建立後會顯示一次性復原碼。請下載或離線保存；Beta 暫不靠 Email 找回密碼。</p>
+            ) : null}
+            {issuedRecoveryCode && !session ? (
+              <div className="ls-recovery-box">
+                <strong>新的復原碼</strong>
+                <code>{issuedRecoveryCode}</code>
+                <div className="ls-recovery-actions">
+                  <button className="ls-button ls-secondary" type="button" onClick={() => void copyRecoveryCode()}><Copy size={15} /> 複製</button>
+                  <button className="ls-button ls-secondary" type="button" onClick={downloadRecoveryCode}><Download size={15} /> 下載</button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <>
+            {issuedRecoveryCode ? (
+              <div className="ls-connect-card ls-recovery-card">
+                <span className="ls-step-chip">重要</span>
+                <h2>先保存你的復原碼</h2>
+                <p>這是目前唯一能在忘記密碼時復原帳號的憑證。只顯示在這個瀏覽器工作階段，不會寄 Email。</p>
+                <div className="ls-recovery-box">
+                  <code>{issuedRecoveryCode}</code>
+                  <div className="ls-recovery-actions">
+                    <button className="ls-button ls-secondary" type="button" onClick={() => void copyRecoveryCode()}><Copy size={15} /> 複製</button>
+                    <button className="ls-button ls-secondary" type="button" onClick={downloadRecoveryCode}><Download size={15} /> 下載</button>
+                    <button className="ls-button ls-primary" type="button" onClick={() => setIssuedRecoveryCode("")}>我已保存</button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="ls-connect-card">
               <div className="ls-connect-card-head">
                 <div>

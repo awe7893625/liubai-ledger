@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  internalAuthEmail,
   normalizeAmount,
   normalizedMerchant,
+  normalizeUsername,
   sha256Hex,
+  validPassword,
 } from "./cloud.js";
 
 test("normalize wallet currency strings to minor units", () => {
@@ -28,4 +31,25 @@ test("sha256 helper is deterministic", () => {
     sha256Hex("ledger"),
     "fe14010b4fe83303852f0467c919ef9a7ca089b91e96e3aad7d426dd87079297",
   );
+});
+
+test("public beta usernames are normalized and reserved names rejected", () => {
+  assert.equal(normalizeUsername("  Rain_2026 "), "rain_2026");
+  assert.equal(normalizeUsername("ab"), null);
+  assert.equal(normalizeUsername("a b c"), null);
+  assert.equal(normalizeUsername("admin"), null);
+  assert.equal(normalizeUsername("中文帳號"), null);
+});
+
+test("internal auth email is stable and non-routable", () => {
+  const email = internalAuthEmail("rain_2026");
+  assert.match(email, /^u-[a-f0-9]{32}@users\.liubai\.invalid$/);
+  assert.equal(email, internalAuthEmail("rain_2026"));
+  assert.notEqual(email, internalAuthEmail("rain_2027"));
+});
+
+test("beta passwords require 12-128 characters", () => {
+  assert.equal(validPassword("12345678901"), false);
+  assert.equal(validPassword("correct horse battery staple"), true);
+  assert.equal(validPassword("x".repeat(129)), false);
 });
