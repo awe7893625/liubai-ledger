@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import plistlib
+import re
 import sys
 from pathlib import Path
 
@@ -63,6 +64,10 @@ routes = vercel.get("routes", [])
 fs_index = next((i for i, route in enumerate(routes) if route.get("handle") == "filesystem"), -1)
 block_index = next((i for i, route in enumerate(routes) if route.get("dest") == "/not-an-api.json"), -1)
 check(fs_index >= 0 and block_index > fs_index, "Vercel filesystem route must precede legacy API 404 guard")
+spa_route = next((route.get("src", "") for route in routes if route.get("dest") == "/index.html"), "")
+check(bool(re.fullmatch(spa_route, "/connect")), "SPA fallback must serve /connect")
+for path in ("/api/v2/missing", "/@vite/client", "/@react-refresh", "/@id/module", "/@fs/tmp/module", "/src/main.tsx", "/node_modules/package/index.js", "/assets/missing.js"):
+    check(not re.fullmatch(spa_route, path), f"SPA fallback must not rewrite module/API path: {path}")
 
 if errors:
     print("FAIL cloud-v2 static gate")

@@ -32,7 +32,7 @@
       }
     },
     {
-      "src": "/.*",
+      "src": "/(?!api(?:/|$)|@vite(?:/|$)|@react-refresh$|@id(?:/|$)|@fs(?:/|$)|src(?:/|$)|node_modules(?:/|$)|assets(?:/|$)).*",
       "dest": "/index.html"
     }
   ]
