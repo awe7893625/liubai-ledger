@@ -71,7 +71,7 @@ def main():
     public = {"apikey": anon}
     report = {"at": datetime.now(timezone.utc).isoformat(), "app_url": app,
               "project_ref": ref, "runtime": "loopback_with_hosted_db" if args.local_runtime else "hosted", "checks": [], "cleanup": [],
-              "not_tested": ["real email delivery", "real iPhone import/pairing", "real Apple Pay trigger"]}
+              "not_tested": ["optional email/OAuth delivery", "real iPhone import/pairing", "real Apple Pay trigger"]}
     created = []
     run_id = secrets.token_hex(6)
     failure = None
@@ -193,7 +193,7 @@ def main():
     if failure:
         raise failure
     runtime = "loopback runtime + hosted DB" if args.local_runtime else "hosted cloud"
-    print(f"PASS {runtime} E2E; synthetic users removed. Email delivery and iPhone remain separate release gates.", flush=True)
+    print(f"PASS {runtime} E2E; synthetic users removed. Real iPhone/Apple Pay remains the separate automation gate.", flush=True)
     return 0
 
 

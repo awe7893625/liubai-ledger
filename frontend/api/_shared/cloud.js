@@ -98,7 +98,12 @@ export function validPassword(value) {
 }
 
 export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSeconds) {
-  const forwarded = String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "unknown");
+  const forwarded = String(
+    req.headers["x-vercel-forwarded-for"] ||
+    req.headers["x-forwarded-for"] ||
+    req.headers["x-real-ip"] ||
+    "unknown",
+  );
   const ip = forwarded.split(",")[0].trim().slice(0, 96) || "unknown";
   const secret = secretKey();
   const bucketHash = crypto.createHmac("sha256", secret).update(`${route}:${ip}`).digest("hex");
@@ -118,6 +123,14 @@ export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSe
     .gte("created_at", since);
   if (countError) throw countError;
   if ((count || 0) > maxAttempts) throw httpError(429, "Too many attempts. Try again later.");
+
+  const retentionCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+  const { error: cleanupError } = await db
+    .from("ledger_auth_attempts")
+    .delete()
+    .eq("route", route)
+    .lt("created_at", retentionCutoff);
+  if (cleanupError) console.warn("Auth rate-limit cleanup failed", cleanupError.message);
 }
 
 export function normalizeAmount(value) {
