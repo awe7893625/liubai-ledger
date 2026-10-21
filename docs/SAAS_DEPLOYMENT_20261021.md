@@ -32,8 +32,11 @@ optional future enhancement, not a release blocker.
   permission or author identity was rewritten.
 - Production deployment `dpl_6251dRj6MDHdU7fh1kWvDFauvuGc` first reached READY.
 - Public-auth production deployment `dpl_D48hMjxykkYNzBYoekHWX6kdaupM` then reached
-  READY and replaced the same alias: `https://liubai-ledger-cloud-v2-preview.vercel.app`.
-- Public auth is rate-limited server-side, caps the initial free Beta at 500
+  READY and replaced the same alias.
+- Final rate-limit hardening deployment `dpl_5cAHDWojpUSuWDPauvsKPCrpsPr2` is the
+  current READY production behind `https://liubai-ledger-cloud-v2-preview.vercel.app`.
+- Public auth is rate-limited server-side using Vercel's forwarded client-IP header,
+  automatically prunes rate buckets older than 48 hours, caps the initial free Beta at 500
   username accounts, uses non-routable internal Auth emails, and stores only a
   SHA-256 recovery-code hash in a server-only RLS table.
 
@@ -85,6 +88,9 @@ A separate public-auth production acceptance then passed:
 9. 1280px browser login, manual transaction, render and sign-out passed.
 
 The synthetic auth user and rate-limit rows were deleted after this acceptance.
+The final hardening deployment was smoke-tested again for health, signup, tenant
+bootstrap, duplicate-username rejection, login, password recovery/rotation, and
+cleanup; all checks passed.
 
 ## Remaining release gates
 
