@@ -74,6 +74,13 @@ for endpoint in (
 ):
     check((ROOT / endpoint).is_file(), f"missing Vercel API handler: {endpoint}")
 
+vercel_function_files = [
+    path for path in (ROOT / "frontend/api").rglob("*.js")
+    if "_shared" not in path.parts
+]
+check(len(vercel_function_files) <= 12, f"Hobby Vercel function limit exceeded: {len(vercel_function_files)} > 12")
+check(not any(path.name.endswith(".test.js") for path in vercel_function_files), "test files must stay outside frontend/api")
+
 vercel = json.loads((ROOT / "frontend/vercel.json").read_text())
 routes = vercel.get("routes", [])
 fs_index = next((i for i, route in enumerate(routes) if route.get("handle") == "filesystem"), -1)

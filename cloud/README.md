@@ -118,6 +118,25 @@ The Supabase/Vercel integration also maintains Vercel deployment redirect URLs
 for Supabase Auth, so preview deployments do not need a hand-maintained list of
 every generated Vercel URL.
 
+### Google Sign-In
+
+Google Sign-In uses Google Identity Services in the browser and sends the returned
+ID token to `POST /api/v2/auth/google`. The server verifies that token against a
+single Web OAuth client ID, maps the Google subject through a server-only hashed
+identity table, and returns the same Supabase session shape used by the rest of
+Ledger. It requests only `openid email profile`; it does not request Gmail, Drive,
+Calendar, Contacts, or other Google API scopes.
+
+Set the same public Web OAuth client ID as:
+
+- `GOOGLE_WEB_CLIENT_ID` for server-side ID-token audience verification.
+- `VITE_GOOGLE_WEB_CLIENT_ID` for the Google Identity Services button.
+
+No Google client secret is required by this flow, and no client secret belongs in
+`VITE_*` or Git. Production must also expose `/privacy` and `/terms`, and the Google
+Auth Platform app should remain External/Production with the exact production
+origin listed as an authorized JavaScript origin.
+
 Provisioning command after the account owner has accepted the Supabase
 Marketplace terms:
 

@@ -5,6 +5,7 @@ const PublicSite = lazy(() =>
 );
 const DemoPage = lazy(() => import("./public-site/DemoPage"));
 const CloudConnect = lazy(() => import("./public-site/CloudConnect"));
+const LegalPage = lazy(() => import("./public-site/LegalPage"));
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { App } from "./App";
 import "./styles.css";
@@ -20,6 +21,10 @@ if (container) {
           <DemoPage />
         ) : window.location.pathname.replace(/\/$/, "") === "/connect" ? (
           <CloudConnect />
+        ) : window.location.pathname.replace(/\/$/, "") === "/privacy" ? (
+          <LegalPage kind="privacy" />
+        ) : window.location.pathname.replace(/\/$/, "") === "/terms" ? (
+          <LegalPage kind="terms" />
         ) : (
           <PublicSite />
         )}

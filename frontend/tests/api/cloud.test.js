@@ -8,7 +8,7 @@ import {
   normalizeUsername,
   sha256Hex,
   validPassword,
-} from "./cloud.js";
+} from "../../api/_shared/cloud.js";
 
 test("normalize wallet currency strings to minor units", () => {
   assert.equal(normalizeAmount(120), 12000);

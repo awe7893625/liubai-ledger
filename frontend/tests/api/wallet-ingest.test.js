@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 
-import handler from "./ingest.js";
-import { sha256Hex } from "../../_shared/cloud.js";
+import handler from "../../api/v2/wallet/ingest.js";
+import { sha256Hex } from "../../api/_shared/cloud.js";
 
 const USER_ID = "user-1";
 const DEVICE_ID = "device-1";

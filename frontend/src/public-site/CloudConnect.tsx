@@ -623,6 +623,7 @@ export function CloudConnect() {
               ) : null}
 
               <div className="ls-auth-trust"><KeyRound size={14} /> 密碼由 Supabase Auth 處理，Ledger 不保存明文密碼</div>
+              <div className="ls-auth-legal"><a href="/privacy">隱私權政策</a><span>·</span><a href="/terms">服務條款</a></div>
             </div>
           </div>
         ) : (
