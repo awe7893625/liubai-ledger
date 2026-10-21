@@ -16,6 +16,11 @@ function rewrittenLocation(value, publicOrigin) {
 export default {
   async fetch(request) {
     const incoming = new URL(request.url);
+
+    if ((request.method === "GET" || request.method === "HEAD") && incoming.pathname === "/") {
+      return Response.redirect(`${incoming.origin}/connect`, 302);
+    }
+
     const upstream = new URL(`${incoming.pathname}${incoming.search}`, UPSTREAM_ORIGIN);
     const headers = new Headers(request.headers);
 
