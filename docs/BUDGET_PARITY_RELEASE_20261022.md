@@ -67,7 +67,19 @@ removed. Month analysis and budget views use the selected list month.
   authorized by the current connector. Do not claim a platform-advisor pass.
   Schema privileges and RLS are tested directly with synthetic identities.
 
-Local ignored evidence: `.qa/budget-parity-20261022/`.
+## Deployment receipt
+
+- Source release: `d65559a` (including preceding automatic checkpoint commits).
+- Production deployment: `dpl_CJbKSgYvgjkH33BBkGBQH3ttayjK`, READY, aliased to the brand domain.
+- Production smoke: app/transaction/settings pages 200, health 200, unauthenticated
+  budget and transaction APIs 401, both signed Shortcut downloads match release
+  hashes. This is an unauthenticated smoke check, not a full signed-in replay.
+- The two synthetic users from the latest integration run were removed; cleanup
+  verified zero scoped profile/account/category/transaction/device/event/budget rows.
+- The development server started for this run was stopped after deployment.
+
+Local ignored evidence: `.qa/budget-parity-20261022/`, including
+`diagnostic-retest/report.json` and `production-smoke.json`.
 
 ```sh
 bash scripts/release_public_beta.sh --check
