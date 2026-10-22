@@ -15,6 +15,7 @@ import {
   Receipt,
   RefreshCw,
   Settings2,
+  Search,
   ShieldCheck,
   Smartphone,
   Trash2,
@@ -30,6 +31,8 @@ import type { CloudPreferences } from "./cloud-preferences";
 import "./app-theme.css";
 import { SpendingInsights } from "./SpendingInsights";
 import { MonthlyPlanner } from "./MonthlyPlanner";
+import { LedgerExplore } from "./LedgerExplore";
+import type { QuickDraft } from "./explore-data";
 import { TransactionEditor } from "./TransactionEditor";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
@@ -273,11 +276,11 @@ export function CloudConnect() {
     const params = new URLSearchParams(window.location.search);
     return params.get("section") === "shortcuts" || params.get("paired") === "1" ? "shortcuts" : "general";
   });
-  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">(() => {
+  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "explore" | "settings">(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
     if (params.get("paired") === "1") return "settings";
-    return tab === "capture" || tab === "transactions" || tab === "settings" ? tab : "home";
+    return tab === "capture" || tab === "transactions" || tab === "explore" || tab === "settings" ? tab : "home";
   });
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -285,6 +288,7 @@ export function CloudConnect() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [amount, setAmount] = useState("");
+  const [quickDraftActive, setQuickDraftActive] = useState(false);
   const [direction, setDirection] = useState<"expense" | "income">("expense");
   const [overviewMonth, setOverviewMonth] = useState(currentMonth);
   const [overviewCurrency, setOverviewCurrency] = useState("TWD");
@@ -401,7 +405,7 @@ export function CloudConnect() {
         sessionUserRef.current = nextId;
         ++loadGeneration.current; // Old in-flight responses cannot re-populate another account.
         setTransactions([]); setAccounts([]); setCategories([]); setDevices([]);
-        setAmount(""); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
+        setAmount(""); setQuickDraftActive(false); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
         setTicket(null); setIssuedRecoveryCode(""); setMessage(""); setDataError("");
         setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
@@ -567,6 +571,7 @@ export function CloudConnect() {
 
   const submitManual = async () => {
     if (!session || submitLock.current || !amount.trim() || !merchant.trim()) return;
+    if (quickDraftActive && !accountId) { setMessage("請先選擇這筆草稿的付款帳戶。"); return; }
     const value = Number(amount.trim());
     const parsedDate = new Date(occurredAt);
     if (!/^\d+(?:\.\d{1,2})?$/.test(amount.trim()) || value <= 0 || !Number.isSafeInteger(Math.round(value * 100))) {
@@ -586,7 +591,7 @@ export function CloudConnect() {
       if (!result.ok || !result.transaction?.id) throw new Error("後端尚未確認入帳，請保留內容並重試。");
       if (sessionUserRef.current !== owner) return;
       manualRequest.current = null;
-      setAmount(""); setMerchant(""); setNote(""); setOccurredAt(dateTimeLocalValue());
+      setAmount(""); setQuickDraftActive(false); setMerchant(""); setNote(""); setOccurredAt(dateTimeLocalValue());
       setMessage(result.duplicate ? "✅ 這筆已記帳，沒有重複新增。" : "✅ 已記帳。");
       setActiveTab("home");
       await loadCloudData().catch(() => setMessage("✅ 已入帳，但列表更新失敗。請重新整理，不必再記一次。"));
@@ -610,6 +615,14 @@ export function CloudConnect() {
       setEditing(null); setMessage("✅ 交易已更新。");
       await loadCloudData().catch(() => setMessage("已更新，請重新整理交易列表。"));
     } finally { if (sessionUserRef.current === owner) setBusy(false); }
+  };
+
+  const acceptQuickDraft = (draft: QuickDraft) => {
+    if (!session || dataLoading || dataError) return;
+    setAmount(draft.amount); setMerchant(draft.merchant); setDirection(draft.direction);
+    setAccountId(draft.accountId || ""); setCategoryId(draft.categoryId || "");
+    setNote(draft.original); setOccurredAt(`${draft.day}T12:00`);
+    manualRequest.current = null; setQuickDraftActive(true); setActiveTab("capture"); setMessage("");
   };
 
   const deleteTransaction = async (id: string) => {
@@ -739,6 +752,7 @@ export function CloudConnect() {
       { id: "home" as const, label: "首頁", icon: Home },
       { id: "capture" as const, label: "記一筆", icon: Plus },
       { id: "transactions" as const, label: "交易", icon: Receipt },
+      { id: "explore" as const, label: "探索", icon: Search },
       { id: "settings" as const, label: "設定", icon: Settings2 },
     ];
 
@@ -842,6 +856,7 @@ export function CloudConnect() {
                 <section className="ls-app-page-head">
                   <div><p>快速記帳</p><h1>記一筆</h1><span>填最少的欄位，幾秒就完成。</span></div>
                 </section>
+                {quickDraftActive ? <p role="status" className="lx-warning">草稿已帶入，尚未記帳。時間先預填中午 12:00，請確認付款帳戶、分類與實際時間後儲存。</p> : null}
                 <section className="ls-app-panel ls-app-capture-card">
                   <div className="ls-direction-switch" role="group" aria-label="收支類型"><button type="button" aria-pressed={direction === "expense"} onClick={() => setDirection("expense")}>支出</button><button type="button" aria-pressed={direction === "income"} onClick={() => setDirection("income")}>收入</button></div>
                   <label className="ls-app-amount-field">
@@ -850,8 +865,8 @@ export function CloudConnect() {
                   </label>
                   <div className="ls-app-form-grid">
                     <label className="ls-app-field ls-app-field-wide"><span>商家 / 項目</span><input placeholder="例如：午餐、Uber、咖啡" value={merchant} onChange={(event) => setMerchant(event.target.value)} /></label>
-                    <label className="ls-app-field"><span>分類</span><select aria-label="分類" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
-                    <label className="ls-app-field"><span>帳戶</span><select aria-label="帳戶" value={accountId} onChange={(event) => setAccountId(event.target.value)}>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>分類</span><select aria-label="分類" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">未分類（可選擇）</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>帳戶</span><select aria-label="帳戶" value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">請選擇付款帳戶</option>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
                     <label className="ls-app-field"><span>時間</span><input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
                     <label className="ls-app-field ls-app-field-wide"><span>備註（選填）</span><input placeholder="可留白" value={note} onChange={(event) => setNote(event.target.value)} /></label>
                   </div>
@@ -880,6 +895,8 @@ export function CloudConnect() {
                 </section>
               </div>
             ) : null}
+
+            {activeTab === "explore" ? <LedgerExplore key={`explore-${session.user.id}`} rows={transactions} accounts={accounts} categories={categories} months={months} currencies={currencies} initialMonth={overviewMonth} initialCurrency={overviewCurrency} ready={Boolean(loadedAt)} error={dataError} loading={dataLoading} onRefresh={() => void loadCloudData().catch(() => {})} onDraft={acceptQuickDraft} onTransaction={(id) => { const row = transactions.find((item) => item.id === id); if (row) setEditing(row); }} /> : null}
 
             {activeTab === "settings" ? (
               <div className="ls-app-page">
