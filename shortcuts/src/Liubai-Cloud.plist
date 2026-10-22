@@ -14,8 +14,8 @@
 				<key>UUID</key>
 				<string>76D182E6-F253-583A-B8C9-13F8F9FD33C5</string>
 				<key>WFCommentActionText</key>
-				<string>留白自動記帳 v2｜app.blankspaces.uk
-先從網站設定連接 iPhone。Wallet 自動化傳入辭典 amount / merchant / card。所有銀行共用此捷徑；卡片對應在各自的網站帳號設定。只在後端回覆交易編號與收據後通知。</string>
+				<string>留白自動記帳 v3｜app.blankspaces.uk
+先用留白手動記帳配對並成功記一筆，再設定 Wallet 自動化。傳入辭典 amount / merchant / card。所有銀行共用；卡片對應在自己的帳號設定。只有後端確認入帳才通知；網站無法代替 iPhone 建立交易自動化。</string>
 			</dict>
 		</dict>
 		<dict>
@@ -381,7 +381,7 @@
 				<key>WFNotificationActionTitle</key>
 				<string>留白 Ledger</string>
 				<key>WFNotificationActionBody</key>
-				<string>iPhone 已連接。手動記帳沿用這份憑證，先用測試連線驗證。</string>
+				<string>iPhone 已連接。接著開啟「留白手動記帳」選記支出，成功記一筆後回網站設定 Apple Pay。測試連線不等於入帳成功。</string>
 				<key>WFNotificationActionSound</key>
 				<false/>
 			</dict>

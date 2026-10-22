@@ -24,6 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
+import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
 import "./launch.css";
 
@@ -31,7 +32,7 @@ const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
 const CLOUD_READY = Boolean(SUPABASE_URL && SUPABASE_KEY);
 const GOOGLE_WEB_CLIENT_ID = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() ?? "";
-const SHORTCUT_NAME = "留白自動記帳";
+const SHORTCUT_NAME = "留白手動記帳";
 
 type GoogleCredentialResponse = { credential?: string };
 
@@ -718,6 +719,7 @@ export function CloudConnect() {
                   </button>
                 </section>
 
+                <ShortcutOnboarding key={`home-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={() => setActiveTab("settings")} />
                 <div className="ls-ledger-period"><label>總覽月份<select aria-label="總覽月份" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)}>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><label>幣別<select aria-label="總覽幣別" value={overviewCurrency} onChange={(event) => setOverviewCurrency(event.target.value)}>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><small>只計已確認交易；轉帳不列收支</small></div>
                 <section className="ls-app-stat-grid" aria-label="月份總覽">
                   <article className="ls-app-stat ls-app-stat-primary">
@@ -731,9 +733,9 @@ export function CloudConnect() {
                     <small>已確認交易</small>
                   </article>
                   <article className="ls-app-stat">
-                    <span>自動記帳</span>
-                    <strong>{activeDevices.length > 0 ? "已連接" : "未連接"}</strong>
-                    <small>{activeDevices.length > 0 ? `${activeDevices.length} 台裝置` : "可稍後設定"}</small>
+                    <span>捷徑裝置</span>
+                    <strong>{activeDevices.length > 0 ? "已配對" : "待配對"}</strong>
+                    <small>{activeDevices.length > 0 ? `${activeDevices.length} 台 · 設定頁可測試入帳` : "先用手動捷徑測通"}</small>
                   </article>
                 </section>
 
@@ -808,32 +810,11 @@ export function CloudConnect() {
             {activeTab === "settings" ? (
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
-                  <div><p>設定</p><h1>付款方式與 iPhone</h1><span>先設定自己的卡片，再安裝捷徑；平常直接記帳就好。</span></div>
+                  <div><p>自動記帳設定</p><h1>從手動捷徑，到 Apple Pay</h1><span>先成功記一筆，再把每天的刷卡變成自動記帳。</span></div>
                 </section>
                 <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
+                <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={() => setActiveTab("settings")} />
                 <PaymentSettings session={session} onChanged={loadCloudData} />
-                <section className="ls-app-settings-grid">
-                  <article className="ls-app-setting-card">
-                    <span className="ls-app-setting-icon"><CreditCard size={19} /></span>
-                    <div><strong>1. 安裝自動記帳捷徑</strong><p>新版 v2：所有卡片共用、確認入帳才通知，不需填網址或 Token。舊版請選取代，保留名稱「留白自動記帳」。</p></div>
-                    <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Cloud.shortcut" download>安裝自動記帳</a>
-                  </article>
-                  <article className="ls-app-setting-card">
-                    <span className="ls-app-setting-icon"><Plus size={19} /></span>
-                    <div><strong>2. 安裝手動記帳捷徑</strong><p>支出／收入、選自己的付款方式與分類、備註、未確認資料重送。沿用同一次配對。</p></div>
-                    <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Manual.shortcut" download>安裝手動記帳</a>
-                  </article>
-                  <article className="ls-app-setting-card">
-                    <span className="ls-app-setting-icon"><Link2 size={19} /></span>
-                    <div><strong>3. 連接這支 iPhone</strong><p>先安裝自動記帳捷徑，再按連接。票券 10 分鐘有效；兩支捷徑共用裝置憑證。</p></div>
-                    <button className="ls-button ls-primary" disabled={busy} onClick={() => void startPairing()}>連接 iPhone</button>
-                    {ticket ? <small>票券到期：{timeLabel(ticket.expires_at)}</small> : null}
-                  </article>
-                  <article className="ls-app-setting-card">
-                    <span className="ls-app-setting-icon"><WalletCards size={19} /></span>
-                    <div><strong>4. 測試與 Wallet 自動化</strong><p>先開手動捷徑選「測試連線」，不會建立交易。再到自動化 → 交易 → 選卡片 → 立即執行。</p><p>傳入辭典：amount＝交易金額、merchant＝商家、card＝卡片名稱，再執行「留白自動記帳」。網站付款不保證觸發，可用手動捷徑補記。</p></div>
-                  </article>
-                </section>
 
                 <section className="ls-app-panel">
                   <div className="ls-app-panel-head"><div><p>Devices</p><h2>已連接裝置</h2></div>{paired && activeDevices.length > 0 ? <span className="ls-success-pill"><CheckCircle2 size={15} /> 已連接裝置</span> : null}</div>
@@ -888,8 +869,8 @@ export function CloudConnect() {
             <div className="ls-auth-showcase" aria-hidden="true">
               <div className="ls-auth-showcase-copy">
                 <span className="ls-auth-kicker">留白 Ledger · Free Beta</span>
-                <h1>記帳，應該像打開一個 App 一樣簡單。</h1>
-                <p>登入後就能使用你的私人雲端帳本，之後再把 iPhone Wallet 自動記帳接進來。</p>
+                <h1>Apple Pay 刷卡，讓捷徑幫你記帳。</h1>
+                <p>先用手動捷徑成功記一筆，再依引導設定 Apple Pay 自動記帳。每個人都能使用自己的信用卡與帳本。</p>
               </div>
               <div className="ls-auth-mini-app">
                 <div className="ls-auth-mini-top"><span>今天</span><span>•••</span></div>

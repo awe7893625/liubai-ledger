@@ -274,7 +274,9 @@ export default async function handler(req, res) {
       : unmapped ? "已記帳；卡片尚未對應，請到設定加入 Wallet 別名"
       : "記帳成功";
     const amountLabel = ledgerAmount === null ? "待補金額" : `${ledgerAmount < 0 ? "支出" : "收入"} ${acceptedCurrency} ${(Math.abs(ledgerAmount) / 100).toLocaleString("zh-TW", { maximumFractionDigits: 2 })}`;
-    const message = `${headline}\n${acceptedMerchant || "待補商家"} · ${amountLabel}\n帳本：${config.ledger_label}`;
+    const setupHint = payload.source === "manual" && transaction.status === "confirmed"
+      ? "\n手動捷徑已入帳。回 app.blankspaces.uk → 設定，即可接著設定 Apple Pay 自動記帳。" : "";
+    const message = `${headline}\n${acceptedMerchant || "待補商家"} · ${amountLabel}\n帳本：${config.ledger_label}${setupHint}`;
     return send(res, duplicate ? 200 : 201, {
       ok: true,
       duplicate,
