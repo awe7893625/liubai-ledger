@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 import os
 from urllib.parse import urlparse
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo
 
 import psycopg2
@@ -68,16 +68,16 @@ def source_checks(source: dict) -> None:
             raise ValueError("Empty transaction merchant and description")
 
 
-def owner(cur, expected_display: str):
+def owner(cur, expected_display: str, expected_user_id: str, expected_username: str):
+    # Authorize the explicit owner-approved immutable ID and server-controlled
+    # identity mapping. User-editable auth metadata is never an ownership proof.
+    UUID(expected_user_id)
     cur.execute("""
       select p.user_id from public.ledger_profiles p
-      join auth.users u on u.id=p.user_id
-      where p.username_display=%s and
-            u.raw_user_meta_data->>'provider'='google'
-        and exists (
-          select 1 from public.ledger_google_identities g where g.user_id=p.user_id
-        )
-    """, (expected_display,))
+      join public.ledger_google_identities g on g.user_id=p.user_id
+      where p.user_id=%s and p.username_norm=%s and p.username_display=%s
+        and p.username_norm='g-' || left(g.subject_hash,20)
+    """, (expected_user_id, expected_username, expected_display))
     matches = cur.fetchall()
     if len(matches) != 1:
         raise ValueError("Ambiguous or missing Google target account; refusing write")
@@ -124,6 +124,8 @@ def main():
     ap.add_argument("--migration-file", type=Path, required=True)
     ap.add_argument("--expected-project-ref", required=True)
     ap.add_argument("--expected-display-name", required=True)
+    ap.add_argument("--expected-user-id", required=True)
+    ap.add_argument("--expected-username", required=True)
     ap.add_argument("--output-dir", type=Path, required=True)
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
@@ -151,13 +153,14 @@ def main():
     try:
         with conn.cursor() as cur:
             cur.execute("set transaction read only")
-            target = owner(cur, args.expected_display_name)
+            target = owner(cur, args.expected_display_name, args.expected_user_id, args.expected_username)
             before = inspect(cur, target)
             cur.execute("select count(*) from public.ledger_transactions where user_id<>%s", (str(target),))
             others_before = cur.fetchone()[0]
             conn.rollback()
 
-        snapshot_file = args.output_dir / "cloud-before.json"
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        snapshot_file = args.output_dir / f"cloud-before-{stamp}.json"
         dump_private(snapshot_file, {
             "project_ref":project, "target_display":args.expected_display_name,
             "snapshot":before, "created_utc":datetime.now(timezone.utc).isoformat()
@@ -179,8 +182,10 @@ def main():
         # Atomic DDL + all data. A failure rolls everything back.
         with conn:
             with conn.cursor() as cur:
+                cur.execute("set local lock_timeout='15s'")
+                cur.execute("set local statement_timeout='60s'")
                 cur.execute("select pg_advisory_xact_lock(hashtext('liubai-m4-to-cloud'))")
-                if owner(cur, args.expected_display_name) != target:
+                if owner(cur, args.expected_display_name, args.expected_user_id, args.expected_username) != target:
                     raise ValueError("Target identity changed")
                 sql = args.migration_file.read_text()
                 digest = sha256(sql.encode()).hexdigest()
@@ -299,6 +304,7 @@ def main():
             after = metrics(cur,target)
         dump_private(args.output_dir/"migration-result.json",{
             "status":"COMMITTED_AND_VERIFIED", "target":args.expected_display_name,
+            "new_rows":imported_now, "before_snapshot":snapshot_file.name,
             "source_sha256":sha256(source_bytes).hexdigest(),
             "postflight":after,"at_utc":datetime.now(timezone.utc).isoformat()
         })
