@@ -87,6 +87,26 @@ log tokens or passwords. No private data synchronization was attempted here.
 Any future planning deployment must merge this release so it does not discard
 new public features, and still pass its own separate schema guard.
 
+## Final acceptance
+
+Production deployment `dpl_Hb5rycrT3o3na5UCxvNh3YC7tqLh` is READY at the brand
+domain, deployed source `2f988c5`. The application-only diff contains no schema
+or backend changes relative to `d65559a`.
+
+- 20 presentation tests + 33 existing API tests PASS.
+- Nine isolated browser scenarios PASS (Chromium 390/1280, WebKit 390).
+- Five real hosted checks PASS, using one public synthetic signup and three
+  synthetic transactions. Query totals/evidence, non-writing draft handoff,
+  stored-location parsing, map consent, mobile layout and logout were verified.
+- Cleanup verified: synthetic user deleted, zero remaining scoped rows.
+- Production screenshots contain only synthetic data. Test tiles were local
+  fixtures, not automated OpenStreetMap requests.
+- Pending planning/preferences work has not been deployed or migrated. Original
+  user data, M4 synchronization and native iPhone execution were not touched.
+
+Reports: `.qa/explore-release/browser/report.json` and
+`.qa/explore-release/hosted/report.json` (ignored local verification evidence).
+
 ## Primary implementation references
 
 - https://react-leaflet.js.org/docs/v4/api-map/
