@@ -87,3 +87,21 @@ workflows and restore-tested automated backups remain separate unfinished work.
 References reviewed: Supabase changelog and update reference; PostgreSQL
 transaction isolation documentation. Optimistic filtering is not a claim that
 multiple independent writes run in a serializable transaction.
+
+## Production receipt
+
+- Deployed source `d8aa7c32dba1`; production `dpl_7e8oJFc5W19u3regxVj4mzT8AWMf`, READY.
+- Public pages, health, exact revision metadata and both signed Shortcut hashes
+  passed the release script checks. Existing Shortcut artifacts were unchanged.
+- 49 API tests + 34 presentation tests, 20 new isolated browser checks and 30
+  existing product browser checks PASS. A whitespace-only release check failure
+  was corrected; the initial log was retained separately.
+- No authenticated production financial write test was attempted; existing signup
+  limits were respected. This is not complete hosted persistence acceptance.
+- Changes were integrated into the pending planning/preferences branch. Its full
+  check-only release and 15 planning/settings browser cases PASS; its schema
+  deployment guard was preserved and that branch was not deployed.
+- No M4 import, hosted migration or direct real-account transaction mutation was
+  executed in this run. These remain outstanding, not implicitly completed.
+
+Receipt: `.qa/transaction-integrity-20261023/release-receipt.json`.
