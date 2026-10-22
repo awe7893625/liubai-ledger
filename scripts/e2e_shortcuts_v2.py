@@ -32,7 +32,8 @@ def request(method, url, headers=None, body=None, expected=(200,)):
         status, raw = r.code, r.read(50000)
     data = json.loads(raw) if raw else {}
     if status not in expected:
-        raise AssertionError(f"{method} {urllib.parse.urlparse(url).path}: HTTP {status}, expected {expected}")
+        reason = str(data.get("error", ""))[:160] if isinstance(data, dict) else ""
+        raise AssertionError(f"{method} {urllib.parse.urlparse(url).path}: HTTP {status}, expected {expected}; {reason}")
     return data
 
 

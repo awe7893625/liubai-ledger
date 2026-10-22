@@ -37,7 +37,9 @@ are not silently rewritten. Same-currency account validation and optional stale
 revision checks are enforced by the server, not only by the UI.
 
 Selecting a different account clears filters, editor drafts, month and currency
-state. A slow request from the previous user cannot populate the new session.
+state. The homepage's automatic-bookkeeping CTA now selects the Shortcut settings
+section directly, including after a pairing callback, instead of opening General
+Settings by mistake. A slow request from the previous user cannot populate the new session.
 Transaction names now open the editor; an extra narrow-row edit column was
 removed. Month analysis and budget views use the selected list month.
 
@@ -52,7 +54,15 @@ removed. Month analysis and budget views use the selected list month.
   390px/1280px forms. Exact synthetic identities and their rows are removed.
 - Initial test reports remain preserved: one assertion incorrectly expected a
   budget amount to occur only once; another exposed retained month state on
-  account switch. Their corrections are exercised in a separate final rerun.
+  account switch. A stale synthetic API session after product sign-out was also
+  corrected in the test harness (sessions are not bypassed or forged).
+- Latest authenticated pre-release run: 11 functional checks PASS against local
+  Vercel runtime plus the real hosted database. Its final redundant re-login hit
+  the real login rate limit (429), so the report is retained as FAIL/partial, not
+  rewritten as a complete E2E pass. Both synthetic users and scoped rows were
+  cleaned. Login limits were not weakened; later tests avoid redundant logins.
+- Full authenticated production replay remains a separate acceptance gate. Public
+  route/deployment/hash checks must not be described as an authenticated E2E run.
 - Supabase MCP security-advisor access for the Vercel-created project is not
   authorized by the current connector. Do not claim a platform-advisor pass.
   Schema privileges and RLS are tested directly with synthetic identities.

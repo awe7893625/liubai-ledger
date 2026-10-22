@@ -60,7 +60,13 @@ export async function requireUser(req) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await client.auth.getUser(token);
-  if (error || !data.user) throw httpError(401, "Invalid session");
+  if (error || !data.user) {
+    // Log only an upstream error code/status, never a JWT, user ID, or financial data.
+    if (error) console.warn("ledger_auth_validation", { status: error.status, code: error.code || error.name });
+    if (error?.status === 429) throw httpError(429, "登入驗證服務忙碌，請稍後重試");
+    if (error && (!error.status || error.status >= 500)) throw httpError(503, "暫時無法驗證登入，請稍後重試");
+    throw httpError(401, "Invalid session");
+  }
   return data.user;
 }
 

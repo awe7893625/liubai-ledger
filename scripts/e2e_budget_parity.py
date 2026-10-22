@@ -133,11 +133,10 @@ def main():
                     passed(f'{width}px account switch never displays previous account budget')
             finally:browser.close()
         # Delete only the synthetic budget and check a fresh read is empty.
-        # Product sign-out revokes earlier sessions; obtain a fresh synthetic-user session.
-        renewed=request('POST',app+'/api/v2/auth/login',body={'username':a['username'],'password':a['password']})
-        a['headers']={'Authorization':'Bearer '+renewed['session']['access_token']}
-        current=budget(a)['budget'];assert budget(a,'DELETE',month='2026-10',currency='TWD',version=current['version'])['ok']
-        assert budget(a)['budget'] is None
+        # Use the already authenticated last browser identity. Do not perform an
+        # unnecessary extra login or alter rate limits for test cleanup/verification.
+        current=budget(b)['budget'];assert budget(b,'DELETE',month='2026-10',currency='TWD',version=current['version'])['ok']
+        assert budget(b)['budget'] is None
         passed('budget deletion removes the plan without deleting transactions')
     except Exception as error:
         failure=error;checks.append({'name':'run','status':'FAIL','type':type(error).__name__,'message':str(error)[:350]})

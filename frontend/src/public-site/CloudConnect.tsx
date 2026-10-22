@@ -262,7 +262,10 @@ export function CloudConnect() {
   const [googleSigningIn, setGoogleSigningIn] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
-  const [settingsSection, setSettingsSection] = useState<"general" | "shortcuts">("general");
+  const [settingsSection, setSettingsSection] = useState<"general" | "shortcuts">(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("section") === "shortcuts" || params.get("paired") === "1" ? "shortcuts" : "general";
+  });
   const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
@@ -292,6 +295,7 @@ export function CloudConnect() {
   const [occurredAt, setOccurredAt] = useState(dateTimeLocalValue);
   const [note, setNote] = useState("");
   const paired = useMemo(() => new URLSearchParams(window.location.search).get("paired") === "1", []);
+  const openShortcutSettings = () => { setSettingsSection("shortcuts"); setActiveTab("settings"); };
 
   const accountById = useMemo(
     () => new Map(accounts.map((account) => [account.id, account])),
@@ -751,7 +755,7 @@ export function CloudConnect() {
                   </button>
                 </section>
 
-                <ShortcutOnboarding key={`home-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={() => setActiveTab("settings")} />
+                <ShortcutOnboarding key={`home-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
                 <div className="ls-ledger-period"><label>總覽月份<select aria-label="總覽月份" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)}>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><label>幣別<select aria-label="總覽幣別" value={overviewCurrency} onChange={(event) => setOverviewCurrency(event.target.value)}>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><small>只計已確認交易；轉帳不列收支</small></div>
                 <section className="ls-app-stat-grid" aria-label="月份總覽">
                   <article className="ls-app-stat ls-app-stat-primary">
@@ -783,7 +787,7 @@ export function CloudConnect() {
                       <p>先記第一筆，或連接 iPhone 開始自動記帳。</p>
                       <div>
                         <button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記第一筆</button>
-                        <button className="ls-button ls-secondary" type="button" onClick={() => setActiveTab("settings")}><Smartphone size={16} /> 連接 iPhone</button>
+                        <button className="ls-button ls-secondary" type="button" onClick={openShortcutSettings}><Smartphone size={16} /> 連接 iPhone</button>
                       </div>
                     </div>
                   )}
@@ -793,7 +797,7 @@ export function CloudConnect() {
                 <section className="ls-app-quick-grid">
                   <button type="button" onClick={() => setActiveTab("capture")}><span><Plus size={18} /></span><strong>快速記帳</strong><small>新增一筆支出</small></button>
                   <button type="button" onClick={() => setActiveTab("transactions")}><span><BarChart3 size={18} /></span><strong>交易紀錄</strong><small>查看全部流水</small></button>
-                  <button type="button" onClick={() => setActiveTab("settings")}><span><Smartphone size={18} /></span><strong>自動記帳</strong><small>{activeDevices.length ? "裝置已連接" : "設定 iPhone"}</small></button>
+                  <button type="button" onClick={openShortcutSettings}><span><Smartphone size={18} /></span><strong>自動記帳</strong><small>{activeDevices.length ? "裝置已連接" : "設定 iPhone"}</small></button>
                 </section>
               </div>
             ) : null}
@@ -850,7 +854,7 @@ export function CloudConnect() {
                 <div className="ls-direction-switch" role="group" aria-label="設定分類"><button type="button" aria-pressed={settingsSection === "general"} onClick={() => setSettingsSection("general")}>一般設定</button><button type="button" aria-pressed={settingsSection === "shortcuts"} onClick={() => setSettingsSection("shortcuts")}>iPhone 自動記帳</button></div>
                 {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} onSignOut={() => void supabase?.auth.signOut()} /> : <>
                 <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
-                <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={() => setActiveTab("settings")} />
+                <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
                 <PaymentSettings session={session} onChanged={loadCloudData} />
 
                 <section className="ls-app-panel">
