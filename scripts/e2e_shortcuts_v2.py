@@ -5,8 +5,10 @@ remove this run's synthetic Auth users; no SQL or broad database reads.
 from __future__ import annotations
 import argparse
 import json
+import os
 import re
 import secrets
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -46,9 +48,7 @@ def main():
     env=dotenv_values(args.cleanup_env)
     auth_origin=env["SUPABASE_URL"].rstrip("/")
     assert urllib.parse.urlparse(auth_origin).hostname=="vhosvmnhdrzkhmkmptqg.supabase.co"
-    secret=env.get("SUPABASE_SECRET_KEY") or env["SUPABASE_SERVICE_ROLE_KEY"]
     anon=env.get("SUPABASE_PUBLISHABLE_KEY") or env.get("SUPABASE_ANON_KEY")
-    admin={"apikey":secret,"Authorization":"Bearer "+secret}
     run=secrets.token_hex(5); users=[]; checks=[]; failure=None
     args.report.parent.mkdir(parents=True,exist_ok=True)
     def passed(name):
@@ -60,6 +60,11 @@ def main():
         boot=request("POST",app+"/api/v2/bootstrap",headers,{})
         entry={"id":boot["profile"]["user_id"],"headers":headers,"username":username,"password":password,"bootstrap":boot}
         users.append(entry)
+        # Persist only exact synthetic IDs/names for safe recovery if cleanup fails.
+        manifest=args.report.parent/"cleanup-manifest.json"
+        with manifest.open("w") as f:
+            os.fchmod(f.fileno(),0o600)
+            json.dump({"run_id":run,"users":[{"id":u["id"],"username":u["username"]} for u in users]},f)
         return entry
     def create_account(user,name,alias):
         return request("POST",app+"/api/v2/accounts",user["headers"],
@@ -148,12 +153,21 @@ def main():
     finally:
         cleanup=[]
         for u in reversed(users):
-            try:
-                # Only delete IDs obtained from this run's freshly created sessions.
-                if anon:
+            if anon:
+                try:
                     request("POST",auth_origin+"/auth/v1/logout?scope=global",{**u["headers"],"apikey":anon},expected=(200,204,401,403))
-                request("DELETE",auth_origin+"/auth/v1/admin/users/"+u["id"],admin,expected=(200,204))
-                cleanup.append({"synthetic_user_removed":True})
+                except Exception:
+                    pass  # Auth deletion + cascading row cleanup is verified below.
+        if users:
+            try:
+                server_env=os.environ.copy()
+                for key in ("SUPABASE_URL","SUPABASE_SECRET_KEY","SUPABASE_SERVICE_ROLE_KEY"):
+                    if env.get(key): server_env[key]=env[key]
+                manifest={"run_id":run,"users":[{"id":u["id"],"username":u["username"]} for u in users]}
+                helper=Path(__file__).resolve().with_name("cleanup_shortcuts_qa.mjs")
+                result=subprocess.run(["node",str(helper)],input=json.dumps(manifest),text=True,capture_output=True,env=server_env,timeout=60)
+                if result.returncode: raise RuntimeError("Server SDK synthetic cleanup failed; use saved exact-ID manifest")
+                cleanup=json.loads(result.stdout)["cleanup"]
             except Exception as error:
                 cleanup.append({"synthetic_user_removed":False,"error":type(error).__name__}); failure=failure or error
         args.report.write_text(json.dumps({"status":"FAIL" if failure else "PASS","app":app,"checks":checks,"cleanup":cleanup,

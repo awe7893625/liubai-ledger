@@ -47,14 +47,19 @@ Functions or the Supabase CLI.
 
 The user never copies an API URL, JSON body, bearer token, bank password, or
 Apple ID credential.
+Setup and v2 manual/Wallet download guide: [SHORTCUTS_V2_SETUP.md](../docs/SHORTCUTS_V2_SETUP.md).
+Signed public files are served from `app.blankspaces.uk/shortcuts/`; they contain no tenant credentials.
+
 ## Security principals
 
 Cloud v2 separates browser identity and ingestion identity.
 
 - **User session** — Supabase Auth JWT. It can read only that user's rows via RLS
   and can call user-scoped Vercel APIs such as device management.
-- **Device token** — random `ldb_dev_...` credential. It can only ingest wallet
-  events. It cannot read transactions, export data, or manage the account.
+- **Device token** — random `ldb_dev_...` credential. It ingests Wallet or manual
+  events and reads only its owner's display label, payment choices and categories
+  for the v2 manual Shortcut. It cannot read transactions/balances, export data,
+  change payment settings, or manage the account.
 - **Pair ticket** — high entropy, SHA-256 hashed at rest, 10-minute expiry,
   single-use claim.
 
@@ -96,7 +101,9 @@ Canonical handlers live under `frontend/api/v2`:
   mutations, always scoped from the server-validated user session.
 - `POST /api/v2/pair/start` — authenticated user creates one ticket.
 - `POST /api/v2/pair/exchange` — public-by-ticket, returns device token once.
-- `POST /api/v2/wallet/ingest` — public-by-device-token, validates and dedupes.
+- `GET /api/v2/wallet/ingest` — device-token-scoped configuration/probe; no ledger reads or transaction creation.
+- `POST /api/v2/wallet/ingest` — device-token-scoped Wallet/manual ingest, validates ownership and dedupes.
+- `GET|POST|PATCH|DELETE /api/v2/accounts` — authenticated, tenant-scoped payment names and exact Wallet aliases.
 - `GET|POST /api/v2/devices` — authenticated list/revoke.
 ## Vercel + Supabase Marketplace
 
