@@ -275,6 +275,9 @@ export function CloudConnect() {
   const [overviewCurrency, setOverviewCurrency] = useState("TWD");
   const [filterMonth, setFilterMonth] = useState("");
   const [search, setSearch] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
   const [merchant, setMerchant] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -295,7 +298,7 @@ export function CloudConnect() {
   const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
   const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
   const currencies = useMemo(() => [...new Set(["TWD", ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions]);
-  const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById), [transactions, filterMonth, search, accountById, categoryById]);
+  const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || tx.category_id === selectedCategory) && (!selectedStatus || tx.status === selectedStatus)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus]);
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
   const displayName = useMemo(() => {
@@ -802,6 +805,7 @@ export function CloudConnect() {
                   </button>
                 </section>
                 <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
+                <div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option></select></label></div>
                 <section className="ls-app-panel">
                   {!loadedAt ? <p className="ls-load-state">{dataError ? "尚未載入，請按重試；不是空白帳本。" : "正在載入交易…"}</p> : filteredTransactions.length > 0 ? <>{renderTransactionRows(filteredTransactions.slice(0, visibleCount))}{filteredTransactions.length > visibleCount ? <button className="ls-button ls-secondary ls-load-more" onClick={() => setVisibleCount((count) => count + 100)}>顯示更多（尚有 {filteredTransactions.length - visibleCount} 筆）</button> : null}</> : (
                     <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>{transactions.length ? "沒有符合的交易" : "還沒有交易"}</strong><p>{transactions.length ? "試試其他月份或搜尋文字。" : "新增第一筆後，交易會出現在這裡。"}</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記一筆</button></div>
