@@ -49,9 +49,10 @@ test("simple draft is explicit and does not infer an account or category", () =>
   const precise = parseQuickDraft("2026-10-21 午餐 1,234.56 玉山日常卡 餐飲", categories, accounts, NOW);
   assert.equal(precise.day, "2026-10-21"); assert.equal(precise.accountId, "a"); assert.equal(precise.categoryId, "food"); assert.equal(precise.amount, "1234.56");
   assert.equal(parseQuickDraft("收入 薪資 50000", categories, accounts, NOW).direction, "income");
+  assert.equal(parseQuickDraft("元氣午餐 NT$120 元", categories, accounts, NOW).merchant, "元氣午餐");
 });
 test("draft rejects questions, transfers, negative/ambiguous amounts and non-TWD cards", () => {
-  for (const text of ["午餐多少120？", "轉帳 120", "退款 120", "午餐 -120", "午餐 1.234", "午餐 12,34", "午餐 120 50", "7-11 120", "午餐 10 美金卡", "咖啡 USD 120", "午餐 9999999999999999999", "2026-02-31 午餐 50"]) assert.throws(() => parseQuickDraft(text, categories, accounts, NOW), text);
+  for (const text of ["午餐多少120？", "轉帳 120", "退款 120", "午餐 -120", "午餐 1.234", "午餐 12,34", "午餐 120 50", "7-11 120", "午餐 10 美金卡", "咖啡 USD 120", "咖啡 usd 120", "咖啡 €120", "午餐 9999999999999999999", "2026-02-31 午餐 50"]) assert.throws(() => parseQuickDraft(text, categories, accounts, NOW), text);
 });
 test("parses only explicitly marked legacy or JSON coordinates; bounds and nulls are checked", () => {
   assert.deepEqual(parseLedgerGeo("apple_pay · 🗺️25.033,121.565 · 📍市區店 · 測試"), { lat: 25.033, lng: 121.565, label: "市區店" });

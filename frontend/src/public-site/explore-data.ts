@@ -116,8 +116,11 @@ export function parseQuickDraft(input: string, categories: Named[], accounts: Na
   const [whole, fraction = ""] = raw.replace(/,/g, "").split(".");
   const minor = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   if (!Number.isSafeInteger(minor) || minor <= 0) throw new Error("金額必須為安全範圍內的正數。");
-  const merchant = remaining.replace(raw, " ").replace(/NT\$|TWD|元|台幣|新台幣/gi, " ").replace(/\s+/g, " ").trim();
-  if (!merchant || /[-+]|USD|JPY|美元|日圓/.test(merchant)) throw new Error("請確認商家與幣別；簡短輸入目前只處理台幣正數金額。");
+  const amountIndex = amounts[0].index!;
+  const before = remaining.slice(0, amountIndex).replace(/(?:NT\$|TWD|新台幣|台幣)\s*$/i, " ");
+  const after = remaining.slice(amountIndex + raw.length).replace(/^\s*元(?=\s|$)/, " ");
+  const merchant = `${before} ${after}`.replace(/\s+/g, " ").trim();
+  if (!merchant || /[-+$€¥£]|USD|JPY|EUR|GBP|HKD|美元|日圓|歐元|港幣/i.test(merchant)) throw new Error("請確認商家與幣別；簡短輸入目前只處理台幣正數金額。");
   if (account.found?.currency && account.found.currency !== "TWD") throw new Error("這個帳戶不是台幣，請使用一般記帳表單。");
   return { amount: (minor / 100).toFixed(2), merchant, direction, accountId: account.found?.id || null, categoryId: category.found?.id || null, day, original: input };
 }

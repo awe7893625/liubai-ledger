@@ -281,6 +281,7 @@ export function CloudConnect() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [amount, setAmount] = useState("");
+  const [quickDraftActive, setQuickDraftActive] = useState(false);
   const [direction, setDirection] = useState<"expense" | "income">("expense");
   const [overviewMonth, setOverviewMonth] = useState(currentMonth);
   const [overviewCurrency, setOverviewCurrency] = useState("TWD");
@@ -370,7 +371,7 @@ export function CloudConnect() {
         sessionUserRef.current = nextId;
         ++loadGeneration.current; // Old in-flight responses cannot re-populate another account.
         setTransactions([]); setAccounts([]); setCategories([]); setDevices([]);
-        setAmount(""); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
+        setAmount(""); setQuickDraftActive(false); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
         setTicket(null); setIssuedRecoveryCode(""); setMessage(""); setDataError("");
         setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
@@ -535,6 +536,7 @@ export function CloudConnect() {
 
   const submitManual = async () => {
     if (!session || submitLock.current || !amount.trim() || !merchant.trim()) return;
+    if (quickDraftActive && !accountId) { setMessage("請先選擇這筆草稿的付款帳戶。"); return; }
     const value = Number(amount.trim());
     const parsedDate = new Date(occurredAt);
     if (!/^\d+(?:\.\d{1,2})?$/.test(amount.trim()) || value <= 0 || !Number.isSafeInteger(Math.round(value * 100))) {
@@ -554,7 +556,7 @@ export function CloudConnect() {
       if (!result.ok || !result.transaction?.id) throw new Error("後端尚未確認入帳，請保留內容並重試。");
       if (sessionUserRef.current !== owner) return;
       manualRequest.current = null;
-      setAmount(""); setMerchant(""); setNote(""); setOccurredAt(dateTimeLocalValue());
+      setAmount(""); setQuickDraftActive(false); setMerchant(""); setNote(""); setOccurredAt(dateTimeLocalValue());
       setMessage(result.duplicate ? "✅ 這筆已記帳，沒有重複新增。" : "✅ 已記帳。");
       setActiveTab("home");
       await loadCloudData().catch(() => setMessage("✅ 已入帳，但列表更新失敗。請重新整理，不必再記一次。"));
@@ -585,8 +587,7 @@ export function CloudConnect() {
     setAmount(draft.amount); setMerchant(draft.merchant); setDirection(draft.direction);
     setAccountId(draft.accountId || ""); setCategoryId(draft.categoryId || "");
     setNote(draft.original); setOccurredAt(`${draft.day}T12:00`);
-    manualRequest.current = null; setActiveTab("capture");
-    setMessage("草稿已帶入，尚未記帳。時間先預填中午 12:00，請確認帳戶、分類與實際時間後儲存。");
+    manualRequest.current = null; setQuickDraftActive(true); setActiveTab("capture"); setMessage("");
   };
 
   const deleteTransaction = async (id: string) => {
@@ -820,6 +821,7 @@ export function CloudConnect() {
                 <section className="ls-app-page-head">
                   <div><p>快速記帳</p><h1>記一筆</h1><span>填最少的欄位，幾秒就完成。</span></div>
                 </section>
+                {quickDraftActive ? <p role="status" className="lx-warning">草稿已帶入，尚未記帳。時間先預填中午 12:00，請確認付款帳戶、分類與實際時間後儲存。</p> : null}
                 <section className="ls-app-panel ls-app-capture-card">
                   <div className="ls-direction-switch" role="group" aria-label="收支類型"><button type="button" aria-pressed={direction === "expense"} onClick={() => setDirection("expense")}>支出</button><button type="button" aria-pressed={direction === "income"} onClick={() => setDirection("income")}>收入</button></div>
                   <label className="ls-app-amount-field">
