@@ -15,6 +15,7 @@ import {
   Receipt,
   RefreshCw,
   Settings2,
+  Search,
   ShieldCheck,
   Smartphone,
   Trash2,
@@ -26,6 +27,8 @@ import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
 import { AccountSettings } from "./AccountSettings";
 import { SpendingInsights } from "./SpendingInsights";
+import { LedgerExplore } from "./LedgerExplore";
+import type { QuickDraft } from "./explore-data";
 import { BudgetPanel } from "./BudgetPanel";
 import { TransactionEditor } from "./TransactionEditor";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
@@ -266,11 +269,11 @@ export function CloudConnect() {
     const params = new URLSearchParams(window.location.search);
     return params.get("section") === "shortcuts" || params.get("paired") === "1" ? "shortcuts" : "general";
   });
-  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">(() => {
+  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "explore" | "settings">(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
     if (params.get("paired") === "1") return "settings";
-    return tab === "capture" || tab === "transactions" || tab === "settings" ? tab : "home";
+    return tab === "capture" || tab === "transactions" || tab === "explore" || tab === "settings" ? tab : "home";
   });
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -577,6 +580,15 @@ export function CloudConnect() {
     } finally { if (sessionUserRef.current === owner) setBusy(false); }
   };
 
+  const acceptQuickDraft = (draft: QuickDraft) => {
+    if (!session || dataLoading || dataError) return;
+    setAmount(draft.amount); setMerchant(draft.merchant); setDirection(draft.direction);
+    setAccountId(draft.accountId || ""); setCategoryId(draft.categoryId || "");
+    setNote(draft.original); setOccurredAt(`${draft.day}T12:00`);
+    manualRequest.current = null; setActiveTab("capture");
+    setMessage("草稿已帶入，尚未記帳。時間先預填中午 12:00，請確認帳戶、分類與實際時間後儲存。");
+  };
+
   const deleteTransaction = async (id: string) => {
     if (!session) return;
     const transaction = transactions.find((row) => row.id === id);
@@ -704,6 +716,7 @@ export function CloudConnect() {
       { id: "home" as const, label: "首頁", icon: Home },
       { id: "capture" as const, label: "記一筆", icon: Plus },
       { id: "transactions" as const, label: "交易", icon: Receipt },
+      { id: "explore" as const, label: "探索", icon: Search },
       { id: "settings" as const, label: "設定", icon: Settings2 },
     ];
 
@@ -815,8 +828,8 @@ export function CloudConnect() {
                   </label>
                   <div className="ls-app-form-grid">
                     <label className="ls-app-field ls-app-field-wide"><span>商家 / 項目</span><input placeholder="例如：午餐、Uber、咖啡" value={merchant} onChange={(event) => setMerchant(event.target.value)} /></label>
-                    <label className="ls-app-field"><span>分類</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
-                    <label className="ls-app-field"><span>帳戶</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)}>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>分類</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">未分類（可選擇）</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>帳戶</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">請選擇付款帳戶</option>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
                     <label className="ls-app-field"><span>時間</span><input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
                     <label className="ls-app-field ls-app-field-wide"><span>備註（選填）</span><input placeholder="可留白" value={note} onChange={(event) => setNote(event.target.value)} /></label>
                   </div>
@@ -845,6 +858,8 @@ export function CloudConnect() {
                 </section>
               </div>
             ) : null}
+
+            {activeTab === "explore" ? <LedgerExplore key={`explore-${session.user.id}`} rows={transactions} accounts={accounts} categories={categories} months={months} currencies={currencies} initialMonth={overviewMonth} initialCurrency={overviewCurrency} ready={Boolean(loadedAt)} error={dataError} loading={dataLoading} onRefresh={() => void loadCloudData().catch(() => {})} onDraft={acceptQuickDraft} onTransaction={(id) => { const row = transactions.find((item) => item.id === id); if (row) setEditing(row); }} /> : null}
 
             {activeTab === "settings" ? (
               <div className="ls-app-page">
