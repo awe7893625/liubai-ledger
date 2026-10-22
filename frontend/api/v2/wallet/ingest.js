@@ -10,13 +10,7 @@ import {
   sha256Hex,
 } from "../../_shared/cloud.js";
 
-function deviceToken(req) {
-  const explicit = String(req.headers["x-ledger-device-token"] || "").trim();
-  if (explicit) return explicit;
-  const authorization = String(req.headers.authorization || "").trim();
-  if (authorization.startsWith("Device ")) return authorization.slice(7).trim();
-  throw httpError(401, "Device token required");
-}
+import { matchAccount, ownedConfig, requireDevice } from "../../_shared/account-config.js";
 
 const EVENT_FIELDS = [
   "id",
@@ -145,37 +139,51 @@ async function ensureEventLink(db, event, transaction) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+  if (!["GET", "POST"].includes(req.method)) {
+    res.setHeader("Allow", "GET, POST");
     return send(res, 405, { ok: false, error: "Method not allowed" });
   }
 
   try {
-    const rawToken = deviceToken(req);
-    if (!rawToken.startsWith("ldb_dev_") || rawToken.length < 40) {
-      throw httpError(401, "Invalid device token");
-    }
     const db = adminClient();
-    const tokenHash = sha256Hex(rawToken);
-    const { data: device, error: deviceError } = await db
-      .from("ledger_devices")
-      .select("id,user_id,revoked_at")
-      .eq("token_hash", tokenHash)
-      .is("revoked_at", null)
-      .maybeSingle();
-    if (deviceError) throw deviceError;
-    if (!device) throw httpError(401, "Unknown or revoked device");
-
+    const device = await requireDevice(req, db);
+    const config = await ownedConfig(db, device.user_id);
+    // Narrow device capability: configuration labels only, never transactions/balances.
+    if (req.method === "GET") {
+      return send(res, 200, {
+        ok: true, version: 2, message: "連線成功，尚未建立任何交易",
+        accounts: Object.fromEntries(config.accounts.filter((a) => a.currency === "TWD").map((a) => [a.name, a.id])),
+        categories: Object.fromEntries(config.categories.map((c) => [c.name, c.id])),
+        currency: "TWD",
+      });
+    }
     const body = bodyOf(req);
+    if (body.dry_run === true) return send(res, 200, { ok: true, dry_run: true, message: "連線成功，尚未建立任何交易" });
+    const manual = body.source === "manual";
+    if (body.source && !["manual", "apple_pay"].includes(body.source)) throw httpError(400, "Unsupported source");
+    const direction = body.direction || "expense";
+    if (!["expense", "income"].includes(direction)) throw httpError(400, "Unsupported direction");
+    const explicitAccount = body.account_id ? config.accounts.find((a) => a.id === body.account_id) : null;
+    if (body.account_id && !explicitAccount) throw httpError(400, "Unknown account");
+    const category = body.category_id ? config.categories.find((c) => c.id === body.category_id) : null;
+    if (body.category_id && !category) throw httpError(400, "Unknown category");
+    const match = explicitAccount ? { account: explicitAccount, reason: "selected" } : matchAccount(body.card, config.accounts);
+    if (manual && !explicitAccount) throw httpError(400, "手動記帳請選擇付款方式");
     const amountMinor = normalizeAmount(body.amount);
     const merchant = normalizedMerchant(body.merchant);
-    const card = normalizedMerchant(body.card);
+    const card = normalizedMerchant(body.card) || explicitAccount?.name || null;
+    if (manual && (amountMinor === null || amountMinor <= 0 || !Number.isSafeInteger(amountMinor) || !merchant)) {
+      throw httpError(400, "請填寫有效的正數金額與商家，並用支出／收入選項區分收支");
+    }
     const occurredAt = body.occurred_at && !Number.isNaN(Date.parse(body.occurred_at))
       ? new Date(body.occurred_at).toISOString()
       : new Date().toISOString();
-    const currency = safeCurrency(body.currency);
+    const currency = safeCurrency(body.currency || explicitAccount?.currency);
+    if (manual && currency !== "TWD") throw httpError(400, "手動捷徑目前以 TWD 記帳");
+    if (explicitAccount && currency !== explicitAccount.currency) throw httpError(400, "付款方式幣別不符");
 
     const explicitRequestId = String(body.request_id || "").trim();
+    if (manual && !explicitRequestId) throw httpError(400, "request_id required for safe retry");
     const fallbackBucket = Math.floor(new Date(occurredAt).getTime() / 120000);
     const requestId = explicitRequestId || sha256Hex([
       "wallet-v2",
@@ -198,8 +206,17 @@ export default async function handler(req, res) {
       occurred_at: occurredAt,
       status: amountMinor === null || !merchant ? "needs_review" : "received",
       payload: {
-        payment_method: body.payment_method || "apple_pay",
-        time_source: body.time_source || "shortcut_trigger",
+        payment_method: manual ? "manual" : "apple_pay",
+        time_source: manual ? "manual_entry" : "shortcut_trigger",
+        source: manual ? "manual" : "apple_pay",
+        direction,
+        account_id: match.account?.id || null,
+        account_match: match.reason,
+        category_id: category?.id || null,
+        note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) : null,
+        ledger_amount: amountMinor === null ? null : manual
+          ? (direction === "income" ? Math.abs(amountMinor) : -Math.abs(amountMinor))
+          : (amountMinor < 0 ? Math.abs(amountMinor) : -amountMinor),
       },
     }, device.user_id, requestId);
     const { event, created: eventCreated } = eventResult;
@@ -211,7 +228,8 @@ export default async function handler(req, res) {
     const acceptedCurrency = event.currency || currency;
     const acceptedOccurredAt = event.occurred_at || occurredAt;
     const txStatus = acceptedAmount === null || !acceptedMerchant ? "pending" : "confirmed";
-    const ledgerAmount = acceptedAmount === null
+    const payload = event.payload || {};
+    const ledgerAmount = Object.hasOwn(payload, "ledger_amount") ? payload.ledger_amount : acceptedAmount === null
       ? null
       : (acceptedAmount < 0 ? Math.abs(acceptedAmount) : -acceptedAmount);
 
@@ -219,7 +237,10 @@ export default async function handler(req, res) {
       user_id: event.user_id,
       device_id: event.device_id,
       request_id: event.request_id,
-      source: "apple_pay",
+      source: payload.source === "manual" ? "manual" : "apple_pay",
+      account_id: payload.account_id || null,
+      category_id: payload.category_id || null,
+      note: payload.note || null,
       amount_minor: ledgerAmount,
       currency: acceptedCurrency,
       occurred_at: acceptedOccurredAt,
@@ -241,12 +262,23 @@ export default async function handler(req, res) {
     }
 
     const duplicate = !eventCreated || !transactionCreated;
+    const unmapped = Boolean(acceptedCard && !payload.account_id);
+    const needsReview = transaction.status !== "confirmed" || unmapped;
+    const message = duplicate ? "這筆已存在，沒有重複記帳"
+      : transaction.status !== "confirmed" ? "已保存，金額或商家缺漏，請到帳本確認"
+      : unmapped ? "已記帳；卡片尚未對應，請到設定加入 Wallet 別名"
+      : "記帳成功";
     return send(res, duplicate ? 200 : 201, {
       ok: true,
       duplicate,
       tx_id: transaction.id,
       status: transaction.status,
-      needs_review: transaction.status !== "confirmed",
+      needs_review: needsReview,
+      account_match: payload.account_match || "unmatched",
+      amount_minor: ledgerAmount,
+      currency: acceptedCurrency,
+      merchant: acceptedMerchant,
+      message,
     });
   } catch (error) {
     return handleError(res, error);
