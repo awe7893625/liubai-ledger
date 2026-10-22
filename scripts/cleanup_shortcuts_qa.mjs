@@ -21,7 +21,7 @@ async function main() {
     }
     const verify = await db.auth.admin.getUserById(entry.id);
     if (verify.data?.user || verify.error?.status !== 404) throw new Error("QA auth cleanup not verified");
-    for (const table of ["ledger_profiles", "ledger_accounts", "ledger_categories", "ledger_transactions", "ledger_devices", "ledger_wallet_events"]) {
+    for (const table of ["ledger_profiles", "ledger_accounts", "ledger_categories", "ledger_transactions", "ledger_devices", "ledger_wallet_events", "ledger_budgets"]) {
       const count = await db.from(table).select("user_id", { count: "exact", head: true }).eq("user_id", entry.id);
       if (count.error || count.count !== 0) throw new Error("QA rows remain");
     }

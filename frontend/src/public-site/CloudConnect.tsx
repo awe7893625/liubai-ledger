@@ -368,6 +368,7 @@ export function CloudConnect() {
         setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
         setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus("");
+        setOverviewMonth(currentMonth()); setOverviewCurrency("TWD");
         setEditing(null);
         manualRequest.current = null; submitLock.current = false;
       }

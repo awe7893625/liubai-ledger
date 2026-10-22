@@ -5,7 +5,7 @@ import "./spending-insights.css";
 
 type Label = { id: string; name: string };
 type Props = { transactions: LedgerRow[]; month: string; currency: string; categories: Label[]; accounts: Label[]; onFilterCategory: (id: string) => void };
-const money = (value: number, currency: string) => `${currency === "TWD" ? "NT$" : currency + " "}${(value / 100).toLocaleString("zh-TW", {maximumFractionDigits: 0})}`;
+const money = (value: number, currency: string) => `${currency === "TWD" ? "NT$" : currency + " "}${(value / 100).toLocaleString("zh-TW", {maximumFractionDigits: 2})}`;
 export function SpendingInsights({ transactions, month, currency, categories, accounts, onFilterCategory }: Props) {
   const insights = useMemo(() => {
     const categoryNames = new Map(categories.map((c) => [c.id, c.name]));
@@ -15,7 +15,7 @@ export function SpendingInsights({ transactions, month, currency, categories, ac
     const days = new Map<string, number>();
     let total = 0; let count = 0;
     for (const tx of transactions) {
-      if (ledgerDay(tx).slice(0, 7) !== month || tx.currency !== currency || tx.status !== "confirmed" || tx.amount_minor === null || tx.legacy_kind === "transfer") continue;
+      if (ledgerDay(tx).slice(0, 7) !== month || tx.currency.trim() !== currency || tx.status !== "confirmed" || tx.amount_minor === null || tx.legacy_kind === "transfer") continue;
       if (tx.amount_minor >= 0 || tx.legacy_kind === "refund") continue;
       const amount = -tx.amount_minor;
       total += amount; count++;

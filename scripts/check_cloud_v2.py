@@ -108,6 +108,17 @@ if errors:
         print(" -", item)
     sys.exit(1)
 
+budget_migration = (ROOT / "cloud/supabase/migrations/20261022092623_monthly_budgets.sql").read_text()
+check("alter table public.ledger_budgets enable row level security" in budget_migration, "budget RLS missing")
+check("revoke all on public.ledger_budgets from public, anon, authenticated" in budget_migration, "budget browser writes not revoked")
+check("using ((select auth.uid()) = user_id)" in budget_migration, "budget owner policy missing")
+check(any(route.get("src") == "/api/v2/budgets" and route.get("dest") == "/api/v2/bootstrap?resource=budgets" for route in routes), "budget API alias missing")
+if errors:
+    print("FAIL budget release gate")
+    for item in errors:
+        print(" -", item)
+    sys.exit(1)
+
 print("PASS cloud-v2 static gate")
 print(" - isolated tables + RLS/grants")
 print(" - multi-tenant free SaaS core + server-mediated writes")
