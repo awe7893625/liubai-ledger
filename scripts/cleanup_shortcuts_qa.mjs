@@ -10,7 +10,7 @@ async function main() {
   const db = adminClient();
   const results = [];
   for (const entry of manifest.users) {
-    if (!["qa_a_" + manifest.run_id, "qa_b_" + manifest.run_id].includes(entry.username)) throw new Error("Not this run's synthetic username");
+    if (!["qa_a_", "qa_b_", "qa_launch_a_", "qa_launch_b_"].map((prefix) => prefix + manifest.run_id).includes(entry.username)) throw new Error("Not this run's synthetic username");
     const lookup = await db.auth.admin.getUserById(entry.id);
     if (lookup.error && lookup.error.status !== 404) throw new Error("QA lookup failed");
     if (lookup.data?.user) {

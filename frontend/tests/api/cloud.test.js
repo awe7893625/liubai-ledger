@@ -18,6 +18,9 @@ test("normalize wallet currency strings to minor units", () => {
   assert.equal(normalizeAmount("-25"), -2500);
   assert.equal(normalizeAmount(""), null);
   assert.equal(normalizeAmount("12a"), null);
+  assert.equal(normalizeAmount(Number.MAX_VALUE), null);
+  assert.equal(normalizeAmount("99999999999999999999999"), null);
+  assert.equal(normalizeAmount(Number.POSITIVE_INFINITY), null);
 });
 
 test("normalize merchant without inventing a value", () => {

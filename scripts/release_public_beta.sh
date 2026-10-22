@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Repeatable application-only release. Never applies SQL or imports user data.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FRONTEND="$ROOT/frontend"
+MODE="${1:---check}"
+if [[ "$MODE" != "--check" && "$MODE" != "--deploy" ]]; then
+  echo 'Usage: release_public_beta.sh [--check|--deploy]' >&2; exit 2
+fi
+python3 - "$FRONTEND/.vercel/project.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+assert v['projectName']=='liubai-ledger-cloud-v2-preview'
+assert v['projectId']=='prj_Ra6Bzpn2T1z0BiiC61FhBhiC0hu6'
+assert v['orgId']=='team_aDZBTaEejPcweAPfcMYF63rs'
+print('PASS expected isolated SaaS project')
+PY
+cd "$ROOT"
+git diff --check
+python3 scripts/check_cloud_v2.py
+python3 -m py_compile scripts/e2e_public_launch.py scripts/e2e_shortcuts_v2.py
+(
+  cd "$FRONTEND"
+  npm run typecheck
+  npm run lint
+  npm run test:ledger-ui
+  npm run test:cloud-api
+  npm audit --omit=dev --audit-level=high
+  npm run build
+)
+if [[ "$MODE" == "--check" ]]; then
+  echo 'PASS application release checks. No deployment or database mutation performed.'
+  exit 0
+fi
+cd "$FRONTEND"
+vercel deploy --prod --yes --non-interactive
+cd "$ROOT"
+python3 - "$FRONTEND/public/shortcuts" <<'PY'
+from pathlib import Path
+from urllib.request import Request,urlopen
+import hashlib,json,sys
+base='https://app.blankspaces.uk'
+for path in ['/connect','/privacy','/terms','/api/v2/health']:
+ with urlopen(Request(base+path,headers={'User-Agent':'Mozilla/5.0 LedgerReleaseQA/1.0'}),timeout=30) as r:
+  assert r.status==200
+  if path.endswith('/health'):assert json.load(r)['ok']
+ print('PASS',path)
+for name in ['Liubai-Cloud.shortcut','Liubai-Manual.shortcut']:
+ with urlopen(Request(base+'/shortcuts/'+name,headers={'User-Agent':'Mozilla/5.0 LedgerReleaseQA/1.0'}),timeout=30) as r:
+  content=r.read(2_000_000)
+ local=(Path(sys.argv[1])/name).read_bytes()
+ assert hashlib.sha256(content).digest()==hashlib.sha256(local).digest()
+ print('PASS signed download hash',name)
+PY
+echo 'Deployment and smoke checks passed. Run synthetic production E2E separately; native iPhone acceptance is not implied.'

@@ -7,7 +7,7 @@ function Privacy() {
     <>
       <p className="ls-legal-kicker">Privacy</p>
       <h1>隱私權政策</h1>
-      <p className="ls-legal-updated">最後更新：2026 年 10 月 21 日</p>
+      <p className="ls-legal-updated">最後更新：2026 年 10 月 22 日</p>
       <p>留白 Ledger 是一個免費 Beta 記帳服務。我們以「完成記帳功能所需的最少資料」為原則處理資料，不販售個人資料，也不以帳務內容做廣告定向。</p>
 
       <h2>我們處理哪些資料</h2>
@@ -22,10 +22,10 @@ function Privacy() {
       <p>資料僅用於登入驗證、建立及顯示帳本、裝置配對、自動記帳去重、提供你要求的功能、安全防護、錯誤排查與必要的服務維運。</p>
 
       <h2>服務供應商</h2>
-      <p>目前雲端版主要使用 Vercel 提供網站與 API runtime、Supabase 提供身份驗證與 PostgreSQL 資料庫、Google 提供 Google Sign-In 身份驗證。這些供應商會依各自條款處理執行服務所需的資料。</p>
+      <p>目前雲端版主要使用 Cloudflare 提供品牌網域代理與 HTTPS、Vercel 提供網站與 API runtime、Supabase 提供身份驗證與 PostgreSQL 資料庫、Google 提供 Google Sign-In 身份驗證。這些供應商會依各自條款處理執行服務所需的資料。</p>
 
       <h2>資料控制與刪除</h2>
-      <p>你可以刪除帳本中的個別交易。Beta 期間若要刪除整個帳號與雲端帳本，可寄信至 <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> 提出要求；我們會在確認帳號所有權後處理。</p>
+      <p>你可以在「交易」頁匯出 CSV 備份，也可確認後刪除帳本中的個別交易。Beta 期間若要刪除整個帳號與雲端帳本，可寄信至 <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> 提出要求；我們會在確認帳號所有權後處理。</p>
 
       <h2>安全與限制</h2>
       <p>我們使用租戶隔離（RLS）、伺服器端身份判定與裝置憑證分離來降低跨帳號存取風險。但任何線上服務都無法保證絕對安全，請勿把信用卡完整卡號、銀行密碼、Apple ID 密碼或其他高敏感憑證輸入備註欄位。</p>

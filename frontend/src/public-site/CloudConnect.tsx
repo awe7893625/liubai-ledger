@@ -295,7 +295,7 @@ export function CloudConnect() {
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
   const displayName = useMemo(() => {
-    const raw = session?.user.user_metadata?.display_name;
+    const raw = session?.user.user_metadata?.display_name || session?.user.user_metadata?.username;
     return typeof raw === "string" && raw.trim() ? raw.trim() : "我的帳本";
   }, [session]);
 
@@ -436,6 +436,14 @@ export function CloudConnect() {
     if (!session) return;
     void loadCloudData().catch(() => { /* Persistent inline error, never an empty-ledger success. */ });
   }, [session, loadCloudData]);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [activeTab, session?.user.id]);
+
+  useEffect(() => {
+    if (!/^(✅|已匯出|交易已刪除|復原碼已複製)/.test(message)) return;
+    const timer = window.setTimeout(() => setMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   const authenticate = async () => {
     if (!supabase || !username.trim()) return;
