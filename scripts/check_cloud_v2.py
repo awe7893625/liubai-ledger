@@ -53,7 +53,17 @@ check("REPLACE_WITH" not in raw, "manual user token placeholder remains")
 check("Shortcuts/LiubaiLedger/device-token.txt" in raw, "device token persistence path missing")
 check('"request_id"' in raw and '"occurred_at"' in raw, "stable request metadata missing from Cloud shortcut")
 ingest_source = (ROOT / "frontend/api/v2/wallet/ingest.js").read_text()
-check("x-ledger-device-token" in ingest_source.lower(), "Shortcut/API device header contract mismatch")
+device_source = (ROOT / "frontend/api/_shared/account-config.js").read_text()
+check("x-ledger-device-token" in (ingest_source + device_source).lower(), "Shortcut/API device header contract mismatch")
+manual = plistlib.loads((ROOT / "shortcuts/src/Liubai-Manual.plist").read_bytes())
+manual_raw = json.dumps(manual, ensure_ascii=False)
+check(manual.get("WFWorkflowName") == "留白手動記帳", "manual cloud shortcut missing")
+for name, body in (("Wallet", raw), ("Manual", manual_raw)):
+    check("https://app.blankspaces.uk/api/v2/" in body, f"{name} shortcut must use brand HTTPS endpoint")
+    check("vercel.app" not in body and ".ts.net" not in body, f"{name} shortcut uses old/private URL")
+    check('"tx_id"' in body and '"result"' in body, f"{name} shortcut must require confirmed receipt")
+check("pending-manual.json" in manual_raw, "manual retry draft missing")
+check('"account_id"' in manual_raw and '"category_id"' in manual_raw, "manual shortcut must use tenant configuration")
 check("/api/v2/pair/exchange" in raw, "Cloud Shortcut is not using Vercel pair API")
 check("/api/v2/wallet/ingest" in raw, "Cloud Shortcut is not using Vercel ingest API")
 check("PROJECT.vercel.app" not in raw, "Cloud Shortcut still contains release placeholder")
@@ -71,6 +81,7 @@ for endpoint in (
     "frontend/api/v2/pair/exchange.js",
     "frontend/api/v2/wallet/ingest.js",
     "frontend/api/v2/devices.js",
+    "frontend/api/v2/accounts.js",
 ):
     check((ROOT / endpoint).is_file(), f"missing Vercel API handler: {endpoint}")
 

@@ -5,6 +5,7 @@ import {
   httpError,
   normalizeAmount,
   normalizedMerchant,
+  randomToken,
   safeCurrency,
   send,
   sha256Hex,
@@ -151,7 +152,10 @@ export default async function handler(req, res) {
     // Narrow device capability: configuration labels only, never transactions/balances.
     if (req.method === "GET") {
       return send(res, 200, {
-        ok: true, version: 2, message: "連線成功，尚未建立任何交易",
+        ok: true, version: 2, result: "connected", message: "連線成功，尚未建立任何交易",
+        request_id: `shortcut_${randomToken(18)}`,
+        directions: { "記支出": "expense", "記收入": "income", "測試連線（不記帳）": "probe" },
+        pending_actions: { "重送上次未確認記帳": "retry", "捨棄草稿並重新輸入": "discard", "取消並保留草稿": "cancel" },
         accounts: Object.fromEntries(config.accounts.filter((a) => a.currency === "TWD").map((a) => [a.name, a.id])),
         categories: Object.fromEntries(config.categories.map((c) => [c.name, c.id])),
         currency: "TWD",
@@ -272,8 +276,10 @@ export default async function handler(req, res) {
       ok: true,
       duplicate,
       tx_id: transaction.id,
+      receipt: "ledger_saved_v2",
       status: transaction.status,
       needs_review: needsReview,
+      result: duplicate ? "duplicate" : needsReview ? "review" : "saved",
       account_match: payload.account_match || "unmatched",
       amount_minor: ledgerAmount,
       currency: acceptedCurrency,

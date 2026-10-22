@@ -1,0 +1,19 @@
+.ls-payment-panel{padding:20px;border:1px solid var(--ls-line);border-radius:20px;background:var(--ls-paper);min-width:0}
+.ls-payment-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ls-payment-heading h2{font-size:16px;margin:0 0 6px;letter-spacing:-.02em}
+.ls-payment-heading p,.ls-payment-form p{font-size:12px;color:var(--ls-faint);line-height:1.6;margin:0}
+.ls-payment-heading>.ls-button{flex-shrink:0;min-height:40px;padding:8px 12px;font-size:13px}
+.ls-payment-list{margin-top:14px}
+.ls-payment-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--ls-line)}
+.ls-payment-row>svg{color:var(--ls-accent-ink);flex-shrink:0}
+.ls-payment-row>div{flex:1;min-width:0;overflow-wrap:anywhere}
+.ls-payment-row strong{display:block;font-size:14px}
+.ls-payment-row small{display:block;font-size:12px;color:var(--ls-faint);margin-top:3px}
+.ls-payment-edit{display:grid;place-items:center;flex-shrink:0;width:40px;height:40px;border:0;border-radius:12px;background:var(--ls-soft);color:var(--ls-text);cursor:pointer}
+.ls-payment-form{display:grid;gap:12px;margin-top:16px;border-top:1px solid var(--ls-line);padding-top:16px}
+.ls-payment-form label{display:grid;gap:6px;font-size:12px;color:var(--ls-faint);min-width:0}
+.ls-payment-form input,.ls-payment-form select,.ls-payment-form textarea{width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--ls-strong);border-radius:12px;background:var(--ls-bg);color:var(--ls-text);padding:11px 12px;font:inherit;font-size:16px}
+.ls-payment-form textarea{resize:vertical}
+.ls-payment-form>.ls-button{justify-self:start;font-size:14px;min-height:44px}
+.ls-payment-message{font-size:13px;line-height:1.6;overflow-wrap:anywhere;color:var(--ls-text);margin:14px 0 0}
+@media(max-width:600px){.ls-payment-panel{padding:16px}.ls-payment-heading{align-items:flex-start}.ls-payment-heading h2{font-size:15px}}

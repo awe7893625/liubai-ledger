@@ -27,6 +27,7 @@ export default async function handler(req, res) {
     }
     if (req.method === "POST" && config.accounts.length >= 50) throw httpError(409, "每個帳號最多 50 個付款方式");
     const values = accountInput(body);
+    if (req.method === "PATCH" && body.issuer === undefined) values.issuer = config.accounts.find((a) => a.id === id)?.issuer || null;
     checkAccountCollision(values, config.accounts, req.method === "PATCH" ? id : null);
     let query = req.method === "POST"
       ? db.from("ledger_accounts").insert({ ...values, user_id: user.id })

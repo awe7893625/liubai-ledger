@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
+import { PaymentSettings } from "./PaymentSettings";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
@@ -233,7 +234,10 @@ export function CloudConnect() {
   const [googleSigningIn, setGoogleSigningIn] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
-  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") === "settings" || params.get("paired") === "1" ? "settings" : "home";
+  });
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [transactions, setTransactions] = useState<CloudTransaction[]>([]);
@@ -744,35 +748,41 @@ export function CloudConnect() {
             {activeTab === "settings" ? (
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
-                  <div><p>設定</p><h1>iPhone 與自動記帳</h1><span>平常不用看這頁，第一次設定完成就好。</span></div>
+                  <div><p>設定</p><h1>付款方式與 iPhone</h1><span>先設定自己的卡片，再安裝捷徑；平常直接記帳就好。</span></div>
                 </section>
+                <PaymentSettings session={session} onChanged={loadCloudData} />
                 <section className="ls-app-settings-grid">
                   <article className="ls-app-setting-card">
                     <span className="ls-app-setting-icon"><CreditCard size={19} /></span>
-                    <div><strong>1. 安裝留白自動記帳</strong><p>公開捷徑不內建帳號、API Token 或私人網址。</p></div>
-                    <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Cloud.shortcut" download>安裝捷徑</a>
+                    <div><strong>1. 安裝自動記帳捷徑</strong><p>新版 v2：所有卡片共用、確認入帳才通知，不需填網址或 Token。</p></div>
+                    <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Cloud.shortcut" download>安裝自動記帳</a>
+                  </article>
+                  <article className="ls-app-setting-card">
+                    <span className="ls-app-setting-icon"><Plus size={19} /></span>
+                    <div><strong>2. 安裝手動記帳捷徑</strong><p>支出／收入、選自己的付款方式與分類、備註、未確認資料重送。沿用同一次配對。</p></div>
+                    <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Manual.shortcut" download>安裝手動記帳</a>
                   </article>
                   <article className="ls-app-setting-card">
                     <span className="ls-app-setting-icon"><Link2 size={19} /></span>
-                    <div><strong>2. 連接這支 iPhone</strong><p>建立 10 分鐘、只能用一次的配對票券。</p></div>
+                    <div><strong>3. 連接這支 iPhone</strong><p>先安裝自動記帳捷徑，再按連接。票券 10 分鐘有效；兩支捷徑共用裝置憑證。</p></div>
                     <button className="ls-button ls-primary" disabled={busy} onClick={() => void startPairing()}>連接 iPhone</button>
                     {ticket ? <small>票券到期：{timeLabel(ticket.expires_at)}</small> : null}
                   </article>
                   <article className="ls-app-setting-card">
                     <span className="ls-app-setting-icon"><WalletCards size={19} /></span>
-                    <div><strong>3. Wallet 自動化</strong><p>捷徑 App → 自動化 → 交易 → 選卡片 → 立即執行。網站/App 內付款不保證觸發。</p></div>
+                    <div><strong>4. 測試與 Wallet 自動化</strong><p>先開手動捷徑選「測試連線」，不會建立交易。再到自動化 → 交易 → 選卡片 → 立即執行。</p><p>傳入辭典：amount＝交易金額、merchant＝商家、card＝卡片名稱，再執行「留白自動記帳」。網站付款不保證觸發，可用手動捷徑補記。</p></div>
                   </article>
                 </section>
 
                 <section className="ls-app-panel">
-                  <div className="ls-app-panel-head"><div><p>Devices</p><h2>已連接裝置</h2></div>{paired ? <span className="ls-success-pill"><CheckCircle2 size={15} /> 配對完成</span> : null}</div>
+                  <div className="ls-app-panel-head"><div><p>Devices</p><h2>已連接裝置</h2></div>{paired && activeDevices.length > 0 ? <span className="ls-success-pill"><CheckCircle2 size={15} /> 已連接裝置</span> : null}</div>
                   {activeDevices.length === 0 ? <div className="ls-app-empty ls-app-empty-compact"><strong>目前沒有已啟用裝置</strong><p>手動記帳仍可正常使用。</p></div> : (
                     <div className="ls-device-list">{activeDevices.map((device) => <div className="ls-device-row" key={device.id}><div><strong>{device.name}</strong><small>上次活動：{timeLabel(device.last_seen_at)}</small></div><button className="ls-button ls-danger-ghost" disabled={busy} onClick={() => void revoke(device.id)}><Unplug size={15} /> 解除</button></div>)}</div>
                   )}
                 </section>
 
                 <section className="ls-app-account-card">
-                  <div><strong>帳號與安全</strong><p>Cloud Ledger 與私人 M4 Ledger 完全分開。</p></div>
+                  <div><strong>帳號與安全</strong><p>裝置只可寫入交易與讀取自己的付款選項，不能讀帳本明細。憑證保存在 iCloud「捷徑」檔案夾，不要分享。</p></div>
                   <button className="ls-button ls-secondary" type="button" onClick={() => void supabase?.auth.signOut()}><LogOut size={16} /> 登出</button>
                 </section>
               </div>

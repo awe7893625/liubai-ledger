@@ -20,6 +20,11 @@ function createState() {
       token_hash: sha256Hex(DEVICE_TOKEN),
       revoked_at: null,
     }],
+    accounts: [
+      { id: "card-1", user_id: USER_ID, name: "日常 Visa", currency: "TWD", type: "card", card_aliases: ["Visa 1234"] },
+      { id: "other-card", user_id: "user-2", name: "別人的卡", currency: "TWD", type: "card", card_aliases: ["Visa 1234"] },
+    ],
+    categories: [{ id: "cat-food", user_id: USER_ID, name: "餐飲", slug: "food" }, { id: "other-category", user_id: "user-2", name: "私有分類" }],
     events: [],
     transactions: [],
     nextEventId: 1,
@@ -33,6 +38,8 @@ function rowsFor(state, table) {
   if (table === "ledger_devices") return state.devices;
   if (table === "ledger_wallet_events") return state.events;
   if (table === "ledger_transactions") return state.transactions;
+  if (table === "ledger_accounts") return state.accounts;
+  if (table === "ledger_categories") return state.categories;
   throw new Error(`Unexpected table ${table}`);
 }
 
@@ -131,7 +138,7 @@ function requestBody(overrides = {}) {
   };
 }
 
-async function invoke(state, body = requestBody(), token = DEVICE_TOKEN) {
+async function invoke(state, body = requestBody(), token = DEVICE_TOKEN, method = "POST") {
   installSupabaseBoundary(state);
   let statusCode;
   let responseBody;
@@ -147,7 +154,7 @@ async function invoke(state, body = requestBody(), token = DEVICE_TOKEN) {
     },
   };
   await handler({
-    method: "POST",
+    method,
     headers: { "x-ledger-device-token": token },
     body,
   }, response);
@@ -156,6 +163,70 @@ async function invoke(state, body = requestBody(), token = DEVICE_TOKEN) {
 
 after(() => {
   globalThis.fetch = ORIGINAL_FETCH;
+});
+
+test("device config includes only its owner's choices and no ledger history", async () => {
+  const state = createState();
+  const a = await invoke(state, {}, DEVICE_TOKEN, "GET");
+  const b = await invoke(state, {}, DEVICE_TOKEN, "GET");
+  assert.equal(a.status, 200);
+  assert.deepEqual(a.body.accounts, { "日常 Visa": "card-1" });
+  assert.deepEqual(a.body.categories, { "餐飲": "cat-food" });
+  assert.notEqual(a.body.request_id, b.body.request_id);
+  assert.equal(a.body.transactions, undefined);
+  assert.equal(state.transactions.length, 0);
+});
+
+test("manual expense/income are correctly signed, tenant-scoped, and safely replayed", async () => {
+  const state = createState();
+  const body = requestBody({ source: "manual", direction: "expense", account_id: "card-1", category_id: "cat-food", note: "午餐", amount: "120", user_id: "user-2" });
+  const expense = await invoke(state, body);
+  const replay = await invoke(state, { ...body, amount: "999" });
+  assert.equal(expense.status, 201);
+  assert.equal(replay.body.tx_id, expense.body.tx_id);
+  assert.equal(state.transactions[0].amount_minor, -12000);
+  assert.equal(state.transactions[0].source, "manual");
+  assert.equal(state.transactions[0].user_id, USER_ID);
+  assert.equal(state.transactions[0].account_id, "card-1");
+  assert.equal(state.transactions[0].category_id, "cat-food");
+  assert.equal(state.transactions[0].note, "午餐");
+  const income = await invoke(state, { ...body, direction: "income", request_id: "income-2", amount: "3000" });
+  assert.equal(income.body.amount_minor, 300000);
+  assert.equal(state.transactions[1].amount_minor, 300000);
+});
+
+test("foreign account/category, invalid manual amount and missing request ID cannot create rows", async () => {
+  const state = createState();
+  const body = requestBody({ source: "manual", account_id: "card-1" });
+  for (const fields of [{ account_id: "other-card" }, { category_id: "other-category" }, { amount: -1 }, { amount: "" }, { request_id: "" }]) {
+    assert.equal((await invoke(state, { ...body, ...fields })).status, 400);
+  }
+  assert.equal(state.transactions.length, 0);
+  assert.equal(state.events.length, 0);
+});
+
+test("unknown cards are retained without guessing; known aliases map only within tenant", async () => {
+  const state = createState();
+  const known = await invoke(state);
+  assert.equal(known.body.account_match, "matched");
+  assert.equal(state.transactions[0].account_id, "card-1");
+  assert.equal(known.body.needs_review, false);
+  const unknown = await invoke(state, requestBody({ card: "New Bank Card", request_id: "unknown-2" }));
+  assert.equal(unknown.body.ok, true);
+  assert.equal(unknown.body.needs_review, true);
+  assert.equal(unknown.body.result, "review");
+  assert.equal(state.transactions[1].card_label, "New Bank Card");
+  assert.equal(state.transactions[1].account_id, null);
+});
+
+test("connectivity probe creates no bookkeeping event and revoked devices fail", async () => {
+  const state = createState();
+  assert.equal((await invoke(state, { dry_run: true })).body.dry_run, true);
+  assert.equal(state.events.length, 0);
+  assert.equal(state.transactions.length, 0);
+  state.devices[0].revoked_at = new Date().toISOString();
+  assert.equal((await invoke(state, {}, DEVICE_TOKEN, "GET")).status, 401);
+  assert.equal((await invoke(state)).status, 401);
 });
 
 test("wallet ingest accepts, deduplicates, and recovers safely", async () => {
