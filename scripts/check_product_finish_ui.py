@@ -41,7 +41,7 @@ with sync_playwright() as pw:
     if path=='/api/v2/transactions':
      body=route.request.post_data_json
      if method=='POST':
-      item=tx('added-'+str(len(state['rows'])),-round(float(body['amount'])*100),merchant=body['merchant'],request_id=body['request_id'],category_id=body.get('category_id'),account_id=body.get('account_id'),note=body.get('note'));state['rows'].append(item)
+      item=tx('added-'+str(len(state['rows'])),-round(float(body['amount'])*100),merchant=body['merchant'],request_id=body['request_id'],occurred_at=body['occurred_at'],category_id=body.get('category_id'),account_id=body.get('account_id'),note=body.get('note'));state['rows'].append(item)
       respond({'ok':True,'duplicate':False,'transaction':item},201);return
      if method=='PATCH':
       item=next(row for row in state['rows'] if row['id']==body['id']);item.update({key:value for key,value in body.items() if key not in ('amount','expected_updated_at')})
@@ -76,10 +76,11 @@ with sync_playwright() as pw:
    if width<=760:
     box=save.bounding_box();main=page.locator('.ls-app-main').bounding_box();assert box['y']>=main['y']-1 and box['y']+box['height']<=main['y']+main['height']+1
    date=page.locator('input[type="datetime-local"]').bounding_box();card=page.locator('.ls-app-capture-card').bounding_box();assert date['x']+date['width']<=card['x']+card['width']
-   page.screenshot(path=str(OUT/f'capture-{engine}-{width}.png'));save.click();page.get_by_role('heading',name='我的帳本',exact=True).wait_for();page.get_by_text('測試表單',exact=True).wait_for()
+   page.screenshot(path=str(OUT/f'capture-{engine}-{width}.png'));save.click();page.get_by_role('heading',name='我的帳本',exact=True).wait_for();go('交易');page.get_by_text('測試表單',exact=True).wait_for()
    checks.append({'name':f'{engine}-{width} date field contained, save reachable and manual form completes','status':'PASS'})
    go('交易');page.locator('.lf-more-filters summary').click()
-   assert page.get_by_label('交易排序').locator('option[value="amount_desc"]').is_disabled()
+   option=page.get_by_label('交易排序').locator('option[value="amount_desc"]')
+   assert option.get_attribute('disabled') is not None, {'option':option.evaluate('(el)=>el.outerHTML'),'currency':page.get_by_label('篩選幣別').input_value(),'rows':page.locator('.ls-app-transaction-row').count(),'fixture_currencies':sorted({row['currency'] for row in state['rows']})}
    page.get_by_label('篩選幣別').select_option('TWD');page.get_by_label('交易排序').select_option('amount_desc')
    assert page.locator('.ls-app-transaction-row').first.get_by_text('測試 salary',exact=True).count()+page.locator('.ls-app-transaction-row').first.get_by_text('測試 transfer',exact=True).count()==1
    page.get_by_label('交易排序').select_option('newest');assert page.locator('.lf-day-groups section').count()>1
@@ -103,7 +104,7 @@ with sync_playwright() as pw:
    checks.append({'name':f'{engine}-{width} local appearance persists, other-session logout keeps current browser','status':'PASS'})
    go('探索');page.get_by_role('heading',name='查清楚，再記下一筆',exact=True).wait_for();layout()
    if width<=760:
-    page.set_viewport_size({'width':width,'height':500});layout();page.set_viewport_size({'width':width,'height':height})
+    page.set_viewport_size({'width':width,'height':500});page.wait_for_function('document.querySelector(".ls-app-root").getBoundingClientRect().height <= 501');layout();page.set_viewport_size({'width':width,'height':height})
    page.locator('.ls-app-signout').click();page.get_by_label('帳號名稱',exact=True).wait_for();assert state['logout_scopes'][-1]=='local';assert page.locator('.lx-answer').count()==0
    assert not errors,errors;assert not state['unexpected'],state['unexpected']
    checks.append({'name':f'{engine}-{width} all tabs, viewport resize and local logout pass without JS errors','status':'PASS'})
