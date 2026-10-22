@@ -314,7 +314,11 @@ export function CloudConnect() {
   );
   const activeDevices = useMemo(() => devices.filter((device) => !device.revoked_at), [devices]);
   const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
-  const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
+  const months = useMemo(() => {
+    const [year, month] = currentMonth().split("-").map(Number);
+    const planningMonths = Array.from({ length: 25 }, (_, index) => new Date(Date.UTC(year, month - 1 + index - 12, 1)).toISOString().slice(0, 7));
+    return [...new Set([...planningMonths, ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse();
+  }, [transactions]);
   const currencies = useMemo(() => [...new Set(["TWD", preferences.home_currency, ...accounts.map((a) => a.currency.trim()), ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions, accounts, preferences.home_currency]);
   const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || tx.status === selectedStatus)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus]);
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
@@ -846,8 +850,8 @@ export function CloudConnect() {
                   </label>
                   <div className="ls-app-form-grid">
                     <label className="ls-app-field ls-app-field-wide"><span>商家 / 項目</span><input placeholder="例如：午餐、Uber、咖啡" value={merchant} onChange={(event) => setMerchant(event.target.value)} /></label>
-                    <label className="ls-app-field"><span>分類</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
-                    <label className="ls-app-field"><span>帳戶</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)}>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>分類</span><select aria-label="分類" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>帳戶</span><select aria-label="帳戶" value={accountId} onChange={(event) => setAccountId(event.target.value)}>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
                     <label className="ls-app-field"><span>時間</span><input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
                     <label className="ls-app-field ls-app-field-wide"><span>備註（選填）</span><input placeholder="可留白" value={note} onChange={(event) => setNote(event.target.value)} /></label>
                   </div>

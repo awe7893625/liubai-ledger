@@ -32,6 +32,11 @@ if [[ "$MODE" == "--check" ]]; then
   echo 'PASS application release checks. No deployment or database mutation performed.'
   exit 0
 fi
+# Refuse to ship application code that expects unapplied planning/preferences tables.
+python3 "$ROOT/scripts/check_planning_schema_ready.py" \
+  --env-file "$FRONTEND/.env.saas.local" \
+  --sslrootcert "$ROOT/.qa/supabase-prod-ca-2021.crt" \
+  --expected-project-ref vhosvmnhdrzkhmkmptqg
 cd "$FRONTEND"
 vercel deploy --prod --yes --non-interactive
 cd "$ROOT"

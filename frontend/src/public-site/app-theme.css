@@ -1,34 +1,23 @@
-/* NexPilot notebook tokens for the self-hosted Ledger UI. */
-:root {
-  --bg: #f3efe6;
-  --surface: #fdfcf8;
-  --surface-2: #f2ede2;
-  --ink: #211e19;
-  --ink-2: #5b544a;
-  --ink-3: #746958;
-  --accent: #a8551f;
-  --accent-hover: #884317;
-  --accent-weak: #f3e3d6;
-  --border: #e4ddce;
-  --shadow-1: 0 1px 2px rgba(60, 48, 30, 0.04);
-  --shadow-2: 0 8px 25px rgba(60, 48, 30, 0.08);
-}
-body {
-  background: var(--bg);
-}
-.brand-mark {
-  background: #a8551f;
-  box-shadow: none;
-}
-.summary-hero {
-  background: var(--surface);
-}
-.summary-hero::after {
-  display: none;
-}
-.primary-action {
-  box-shadow: none;
-}
-.sidebar {
-  background: #fbf8f1;
-}
+/* Reuse the existing Ledger design-system tokens for all authenticated surfaces. */
+:root[data-ledger-theme=dark]{color-scheme:dark;background:#15161a} :root[data-ledger-theme=light]{color-scheme:light;background:#f3efe6}
+:root[data-ledger-theme=dark] body{background:#15161a}
+.ledger-site[data-theme] :is(.ls-general-card,.ls-general-notice,.ls-insights,.ls-edit-sheet){background:var(--ls-paper);border-color:var(--ls-line);color:var(--ls-text)}
+.ledger-site[data-theme] :is(.ls-general-heading span,.ls-general-card small,.ls-general-card p,.ls-general-card label,.ls-insights-empty,.ls-insights-top span,.ls-insights .ls-app-panel-head small,.ls-insights-bar-label small,.ls-insights-bottom p,.ls-edit-sheet p){color:var(--ls-faint)}
+.ledger-site[data-theme] :is(.ls-general-heading p,.ls-insights .ls-app-panel-head p){color:var(--ls-faint)}
+.ledger-site[data-theme] :is(.ls-general-card input,.ls-general-card select,.ls-edit-sheet input,.ls-edit-sheet select,.ls-edit-sheet textarea){background:var(--ls-soft);color:var(--ls-text);border-color:var(--ls-strong);font-size:16px}
+.ledger-site[data-theme] .ls-general-avatar{background:var(--ls-accent-soft);color:var(--ls-accent-ink)}
+.ledger-site[data-theme] :is(.ls-general-links a,.ls-general-link,.ls-app-transaction-edit){color:var(--ls-accent-ink)}
+.ledger-site[data-theme] .ls-insights-bar-track{background:var(--ls-soft)}
+.ledger-site[data-theme] .ls-insights-bar-track i{background:var(--ls-accent)}
+.ledger-site[data-theme] .ls-insights-bottom{border-color:var(--ls-line)}
+.ledger-site[data-theme] .ls-insights-bottom b{color:var(--ls-text)}
+.ledger-site[data-theme=dark] .ls-load-error{background:#382c24;color:#f4c49b;border-color:#78543b}
+.ledger-site[data-theme=dark] .ls-app-stat-primary{background:#292b31;color:var(--ls-text)}
+.ledger-site[data-theme=dark] .ls-app-stat-primary :is(span,small){color:var(--ls-muted)}
+.ledger-site[data-theme=dark] .ls-edit-overlay{background:#050608b8}
+.ledger-site[data-theme] .ls-app-field :is(input,select),.ledger-site[data-theme] .ls-general-card :is(input,select){min-width:0;max-width:100%;min-height:44px;width:100%;box-sizing:border-box;appearance:none}
+.ledger-site[data-theme] input[type=datetime-local],.ledger-site[data-theme] input[type=month],.ledger-site[data-theme] input[type=date]{display:block;min-width:0;width:100%;max-width:100%;box-sizing:border-box;-webkit-appearance:none;text-align:left}
+.ledger-site[data-theme] input::-webkit-date-and-time-value{text-align:left;min-width:0}
+.ledger-site[data-theme] input::-webkit-datetime-edit{min-width:0;padding:0}
+.ledger-site[data-theme] .ls-general-card button:disabled{opacity:.55;cursor:default}
+@media(prefers-reduced-motion:reduce){.ledger-site[data-theme] *, .ledger-site[data-theme] *::before,.ledger-site[data-theme] *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
