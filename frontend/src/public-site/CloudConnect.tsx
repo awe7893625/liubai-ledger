@@ -25,8 +25,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
 import { AccountSettings } from "./AccountSettings";
+import { defaultPreferences } from "./cloud-preferences";
+import type { CloudPreferences } from "./cloud-preferences";
+import "./app-theme.css";
 import { SpendingInsights } from "./SpendingInsights";
-import { BudgetPanel } from "./BudgetPanel";
+import { MonthlyPlanner } from "./MonthlyPlanner";
 import { TransactionEditor } from "./TransactionEditor";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
@@ -133,6 +136,7 @@ type BootstrapResponse = {
   };
   accounts: Account[];
   categories: Category[];
+  preferences: CloudPreferences;
 };
 
 function shortcutUrl(ticket: string): string {
@@ -243,6 +247,9 @@ async function cloudRequest<T>(
 export function CloudConnect() {
   const [session, setSession] = useState<Session | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [preferences, setPreferences] = useState<CloudPreferences>(defaultPreferences);
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const preferencesApplied = useRef(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
@@ -308,14 +315,32 @@ export function CloudConnect() {
   const activeDevices = useMemo(() => devices.filter((device) => !device.revoked_at), [devices]);
   const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
   const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
-  const currencies = useMemo(() => [...new Set(["TWD", ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions]);
+  const currencies = useMemo(() => [...new Set(["TWD", preferences.home_currency, ...accounts.map((a) => a.currency.trim()), ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions, accounts, preferences.home_currency]);
   const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || tx.status === selectedStatus)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus]);
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
   const displayName = useMemo(() => {
-    const raw = session?.user.user_metadata?.display_name || session?.user.user_metadata?.username;
+    const raw = preferences.display_name || session?.user.user_metadata?.display_name || session?.user.user_metadata?.username;
     return typeof raw === "string" && raw.trim() ? raw.trim() : "我的帳本";
-  }, [session]);
+  }, [session, preferences.display_name]);
+  const resolvedTheme = preferences.theme === "system" ? (systemDark ? "dark" : "light") : preferences.theme;
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setSystemDark(media.matches);
+    media.addEventListener("change", update); return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (!session) return;
+    document.documentElement.dataset.ledgerTheme = resolvedTheme;
+    return () => { delete document.documentElement.dataset.ledgerTheme; };
+  }, [session, resolvedTheme]);
+  const preferencesChanged = (next: CloudPreferences) => {
+    setPreferences(next); setOverviewCurrency(next.home_currency);
+    if (!amount.trim() && !merchant.trim()) {
+      setAccountId(next.default_account_id || accounts[0]?.id || "");
+      setCategoryId(next.default_category_id || categories.find((c) => c.slug === "other")?.id || "");
+    }
+  };
 
   const loadCloudData = useCallback(async () => {
     if (!supabase || !session) return;
@@ -343,8 +368,13 @@ export function CloudConnect() {
       if (!current()) return;
       setAccounts(bootstrap.accounts ?? []);
       setCategories(bootstrap.categories ?? []);
-      setAccountId((value) => bootstrap.accounts.some((a) => a.id === value) ? value : bootstrap.accounts[0]?.id || "");
-      setCategoryId((value) => bootstrap.categories.some((c) => c.id === value) ? value : bootstrap.categories.find((c) => c.slug === "other")?.id || "");
+      const prefs = bootstrap.preferences || defaultPreferences;
+      setPreferences(prefs);
+      if (!preferencesApplied.current) {
+        setOverviewCurrency(prefs.home_currency); preferencesApplied.current = true;
+      }
+      setAccountId((value) => bootstrap.accounts.some((a) => a.id === value) ? value : prefs.default_account_id || bootstrap.accounts[0]?.id || "");
+      setCategoryId((value) => bootstrap.categories.some((c) => c.id === value) ? value : prefs.default_category_id || bootstrap.categories.find((c) => c.slug === "other")?.id || "");
       setDevices(deviceResult.devices ?? []);
       setTransactions(rows);
       setLoadedAt(new Date().toISOString());
@@ -373,6 +403,7 @@ export function CloudConnect() {
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
         setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus("");
         setOverviewMonth(currentMonth()); setOverviewCurrency("TWD");
+        setPreferences(defaultPreferences); preferencesApplied.current = false;
         setEditing(null);
         manualRequest.current = null; submitLock.current = false;
       }
@@ -708,7 +739,7 @@ export function CloudConnect() {
     ];
 
     return (
-      <main className="ledger-site ls-app-root">
+      <main className="ledger-site ls-app-root" data-theme={resolvedTheme}>
         <section className="ls-app-shell">
           <header className="ls-app-topbar">
             <button className="ls-app-brand" type="button" onClick={() => setActiveTab("home")} aria-label="回到帳本首頁">
@@ -793,7 +824,7 @@ export function CloudConnect() {
                   )}
                 </section>
 
-                <details className="ls-month-tools"><summary>月預算與分類額度 · {overviewMonth}</summary><BudgetPanel key={`budget-home-${session.user.id}-${overviewMonth}-${overviewCurrency}`} session={session} month={overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details>
+                <details className="ls-month-tools"><summary>預算、預留與固定支出 · {overviewMonth}</summary><MonthlyPlanner key={`budget-home-${session.user.id}-${overviewMonth}-${overviewCurrency}`} session={session} month={overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} accounts={accounts} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details>
                 <section className="ls-app-quick-grid">
                   <button type="button" onClick={() => setActiveTab("capture")}><span><Plus size={18} /></span><strong>快速記帳</strong><small>新增一筆支出</small></button>
                   <button type="button" onClick={() => setActiveTab("transactions")}><span><BarChart3 size={18} /></span><strong>交易紀錄</strong><small>查看全部流水</small></button>
@@ -835,7 +866,7 @@ export function CloudConnect() {
                     <RefreshCw size={16} /> 重新整理
                   </button>
                 </section>
-                {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整帳本；下方商家、帳戶篩選只影響明細。</p><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><BudgetPanel key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}
+                {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整帳本；下方商家、帳戶篩選只影響明細。</p><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><MonthlyPlanner key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} accounts={accounts} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}
                 <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); if (event.target.value) setOverviewMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
                 <div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option><option value="__uncategorized__">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option></select></label></div>
                 <section className="ls-app-panel">
@@ -852,7 +883,7 @@ export function CloudConnect() {
                   <div><p>設定</p><h1>帳號與設定</h1><span>管理帳號、安全、偏好與 iPhone 捷徑。</span></div>
                 </section>
                 <div className="ls-direction-switch" role="group" aria-label="設定分類"><button type="button" aria-pressed={settingsSection === "general"} onClick={() => setSettingsSection("general")}>一般設定</button><button type="button" aria-pressed={settingsSection === "shortcuts"} onClick={() => setSettingsSection("shortcuts")}>iPhone 自動記帳</button></div>
-                {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} onSignOut={() => void supabase?.auth.signOut()} /> : <>
+                {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} preferences={preferences} accounts={accounts} categories={categories} ready={Boolean(loadedAt) && !dataError} onPreferencesChanged={preferencesChanged} onSignOut={() => void supabase?.auth.signOut({ scope: "local" })} /> : <>
                 <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
                 <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
                 <PaymentSettings session={session} onChanged={loadCloudData} />

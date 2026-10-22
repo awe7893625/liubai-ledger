@@ -1,78 +1,91 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
+import type { CloudPreferences } from "./cloud-preferences";
 import "./account-settings.css";
 
-type Props = { session: Session; client: SupabaseClient; onSignOut: () => void };
-
-export function AccountSettings({ session, client, onSignOut }: Props) {
-  const uid = session.user.id;
-  const passwordAccount = session.user.email?.endsWith("@users.liubai.invalid") && session.user.user_metadata?.provider !== "google";
+type Option = { id: string; name: string };
+type Props = {
+  session: Session; client: SupabaseClient; onSignOut: () => void;
+  preferences: CloudPreferences; accounts: Option[]; categories: Option[]; ready: boolean;
+  onPreferencesChanged: (next: CloudPreferences) => void;
+};
+export function AccountSettings({ session, client, onSignOut, preferences, accounts, categories, ready, onPreferencesChanged }: Props) {
   const base = session.user.user_metadata?.display_name || session.user.user_metadata?.username || "使用者";
-  const stored = (key: string) => { try { return localStorage.getItem(`ledger-settings:${uid}:${key}`); } catch { return null; } };
-  const [nickname, setNickname] = useState(() => stored("nickname") || base);
-  const [theme, setTheme] = useState(() => stored("theme") || "system");
-  const [currency, setCurrency] = useState(() => stored("currency") || "TWD");
+  const passwordAccount = session.user.email?.endsWith("@users.liubai.invalid") && session.user.user_metadata?.provider !== "google";
+  const [draft, setDraft] = useState(preferences);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const saveLocal = (key: string, value: string) => {
-    try { localStorage.setItem(`ledger-settings:${uid}:${key}`, value); setNotice("已儲存到這台裝置。"); }
-    catch { setNotice("這個瀏覽器不允許儲存偏好。"); }
+  const mounted = useRef(true); const lock = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setDraft(preferences); }, [preferences]);
+
+  const request = async (method: "GET" | "PUT") => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setNotice("");
+    const controller = new AbortController(); const timer = window.setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await fetch("/api/v2/preferences", { method, signal: controller.signal,
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        ...(method === "PUT" ? { body: JSON.stringify(draft) } : {}),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.preferences) throw new Error(result.error || "尚未確認設定結果");
+      if (!mounted.current) return;
+      onPreferencesChanged(result.preferences); setDraft(result.preferences);
+      setNotice(method === "PUT" ? "已儲存到雲端，設定立即生效；其他裝置重新載入即可同步。" : "已重新載入雲端設定。");
+    } catch (error) {
+      if (mounted.current) setNotice(controller.signal.aborted ? "連線逾時，請重新載入確認，勿重複覆蓋。" : error instanceof Error ? error.message : "設定更新失敗");
+    } finally { window.clearTimeout(timer); lock.current = false; if (mounted.current) setBusy(false); }
   };
   const changePassword = async () => {
-    if (!passwordAccount || busy) return;
-    if (newPassword.length < 12 || newPassword.length > 128 || newPassword !== confirmPassword) {
-      setNotice("新密碼需 12–128 字元，且兩次輸入必須一致。"); return;
+    if (!passwordAccount || lock.current) return;
+    if (newPassword.length < 12 || newPassword.length > 128 || newPassword !== confirmPassword || currentPassword === newPassword) {
+      setNotice("新密碼需 12–128 字元、兩次一致，且不可與原密碼相同。"); return;
     }
-    if (currentPassword === newPassword) { setNotice("新密碼不得與原密碼相同。"); return; }
-    setBusy(true); setNotice("");
+    lock.current = true; setBusy(true); setNotice("");
     try {
       const username = session.user.user_metadata?.username;
-      if (typeof username !== "string" || !username) throw new Error("帳號識別不完整，請重新登入。");
-      const response = await fetch("/api/v2/auth/login", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password: currentPassword }) });
-      if (!response.ok) throw new Error("目前密碼不正確，或嘗試次數過多。");
+      if (typeof username !== "string" || !username) throw new Error("請重新登入確認帳號。");
+      const response = await fetch("/api/v2/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password: currentPassword }) });
+      if (!response.ok) throw new Error("原密碼不正確，或嘗試過於頻繁。");
+      const result = await response.json();
+      if (!result.session?.access_token || !result.session?.refresh_token) throw new Error("重新驗證未完成");
+      const verified = await client.auth.getUser(result.session.access_token);
+      if (verified.error || verified.data.user?.id !== session.user.id) throw new Error("重新驗證帳號不符，請重新登入。");
+      if (!mounted.current) return;
+      const renewed = await client.auth.setSession(result.session);
+      if (renewed.error) throw renewed.error;
       const { error } = await client.auth.updateUser({ password: newPassword });
       if (error) throw new Error(error.message);
-      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-      setNotice("密碼已更新。若其他裝置仍登入，請在帳號安全頁登出所有裝置。");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "密碼更新失敗。"); }
-    finally { setBusy(false); }
+      if (mounted.current) { setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setNotice("密碼已更新，請妥善保存原本的復原碼。"); }
+    } catch (error) { if (mounted.current) setNotice(error instanceof Error ? error.message : "密碼更新失敗"); }
+    finally { lock.current = false; if (mounted.current) setBusy(false); }
   };
   return <section className="ls-general-settings" aria-label="一般設定">
-    <div className="ls-general-heading"><p>GENERAL SETTINGS</p><h2>帳號與一般設定</h2><span>個人資料、顯示偏好和安全選項。</span></div>
-    <div className="ls-general-card">
-      <h3>帳號資訊</h3>
-      <div className="ls-general-identity"><div className="ls-general-avatar">{String(nickname).slice(0,1)}</div><div><strong>{nickname}</strong><small>{passwordAccount ? "帳號密碼登入" : "Google 登入"} · 免費帳本</small></div></div>
-      <label>顯示暱稱<input aria-label="顯示暱稱" maxLength={40} value={nickname} onChange={e => setNickname(e.target.value)} placeholder="你希望在這台裝置看到的名稱" /></label>
-      <button className="ls-button ls-secondary" type="button" onClick={() => { const name=nickname.trim(); if (!name) {setNotice("暱稱不可留白。");return;}saveLocal("nickname",name); }}>儲存暱稱</button>
-      <small>暱稱目前只會儲存在這台裝置，不會改變 Google 名稱或登入帳號。</small>
-    </div>
-    <div className="ls-general-card">
-      <h3>顯示與記帳偏好</h3><div className="ls-general-grid">
-        <label>顯示模式<select aria-label="顯示模式" value={theme} onChange={e=>{setTheme(e.target.value);saveLocal("theme",e.target.value);}}><option value="system">跟隨系統（目前網站配色）</option><option value="light">偏好明亮</option><option value="dark">偏好深色</option></select></label>
-        <label>預設檢視幣別<select aria-label="預設檢視幣別" value={currency} onChange={e=>{setCurrency(e.target.value);saveLocal("currency",e.target.value);}}><option value="TWD">TWD 新台幣</option><option value="USD">USD 美元</option><option value="JPY">JPY 日圓</option></select></label>
+    <div className="ls-general-heading"><p>ACCOUNT & PREFERENCES</p><h2>帳號與一般設定</h2><span>偏好跟著帳號，不只留在這台手機。</span></div>
+    <form className="ls-general-card" onSubmit={(event) => { event.preventDefault(); void request("PUT"); }}>
+      <h3>個人化帳本</h3>
+      <div className="ls-general-identity"><div className="ls-general-avatar">{String(draft.display_name || base).slice(0, 1)}</div><div><strong>{draft.display_name || base}</strong><small>{passwordAccount ? "帳號密碼登入" : "Google 登入"} · 免費帳本</small></div></div>
+      <label>顯示暱稱<input aria-label="顯示暱稱" maxLength={40} value={draft.display_name} onChange={(event) => setDraft({ ...draft, display_name: event.target.value })} placeholder={base} /></label>
+      <small>留白使用原始名稱；不會變更 Google 帳號或登入名稱。</small>
+      <div className="ls-general-grid">
+        <label>顯示模式<select aria-label="顯示模式" value={draft.theme} onChange={(event) => setDraft({ ...draft, theme: event.target.value as CloudPreferences["theme"] })}><option value="system">跟隨系統</option><option value="light">明亮</option><option value="dark">深色</option></select></label>
+        <label>預設檢視幣別<select aria-label="預設檢視幣別" value={draft.home_currency} onChange={(event) => setDraft({ ...draft, home_currency: event.target.value })}>{[...new Set([draft.home_currency, "TWD", "USD", "JPY", "EUR", "HKD"])].map((currency) => <option key={currency}>{currency}</option>)}</select></label>
+        <label>預設付款帳戶<select aria-label="預設付款帳戶" value={draft.default_account_id || ""} onChange={(event) => setDraft({ ...draft, default_account_id: event.target.value || null })}><option value="">不指定</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>預設分類<select aria-label="預設分類" value={draft.default_category_id || ""} onChange={(event) => setDraft({ ...draft, default_category_id: event.target.value || null })}><option value="">使用其他分類</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
       </div>
-      <small>目前只儲存偏好，未全面切換深色主題，也不會轉換交易幣別或匯率。</small>
-    </div>
-    <div className="ls-general-card">
-      <h3>登入與安全</h3>
-      {passwordAccount ? <><p>以原密碼驗證後設定新密碼；復原碼仍請妥善保管。</p>
-        <div className="ls-general-grid">
-          <label>目前密碼<input aria-label="目前密碼" type="password" autoComplete="current-password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} /></label>
-          <label>新密碼<input aria-label="新密碼" type="password" autoComplete="new-password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} /></label>
-          <label>再次輸入新密碼<input aria-label="再次輸入新密碼" type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} /></label>
-        </div><button className="ls-button ls-primary" disabled={busy || !currentPassword || !newPassword} onClick={()=>void changePassword()}>{busy?"驗證中…":"更新密碼"}</button>
-        <p>忘記密碼？登出後可使用先前保存的復原碼重設。</p>
-      </> : <p>此帳號由 Google 驗證身份。若要修改 Google 密碼或復原方式，請使用 Google 帳號的安全設定。</p>}
+      <small>檢視幣別不會換匯或修改交易。網頁新增交易的幣別由付款帳戶決定；捷徑仍沿用每次選擇的付款方式。</small>
+      <div className="ls-general-links"><button className="ls-button ls-primary" type="submit" disabled={!ready || busy}>{busy ? "處理中…" : "儲存一般設定"}</button><button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void request("GET")}>重新載入設定</button></div>
+      <small>{preferences.updated_at ? `雲端設定版本 ${preferences.version}` : "尚未儲存個人偏好"}</small>
+    </form>
+    <div className="ls-general-card"><h3>登入與安全</h3>
+      {passwordAccount ? <><p>更新密碼前會重新驗證原密碼。</p><div className="ls-general-grid"><label>目前密碼<input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label><label>新密碼<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>再次輸入新密碼<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label></div><button className="ls-button ls-secondary" disabled={busy || !currentPassword || !newPassword} onClick={() => void changePassword()}>更新密碼</button><p>忘記密碼可在登入頁使用先前保存的復原碼。</p></> : <><p>Google 密碼和復原方式請到 Google 帳號管理；Ledger 不保存你的 Google 密碼。</p><a className="ls-general-link" href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Google 帳號安全中心</a></>}
       <button className="ls-button ls-secondary" type="button" onClick={onSignOut}>登出這台裝置</button>
-      <a className="ls-general-link" href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Google 帳號安全中心</a>
     </div>
-    <div className="ls-general-card"><h3>資料與隱私</h3><p>「交易」頁可篩選、下載 CSV；若要刪除整個帳號與交易，需先驗證所有權。</p>
-      <div className="ls-general-links"><a href="/privacy">隱私權政策</a><a href="/terms">服務條款</a><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Account%20Deletion">申請刪除帳號</a></div>
-    </div>
+    <div className="ls-general-card"><h3>資料與隱私</h3><p>交易頁可下載 CSV。需刪除帳號時，提出申請後會先驗證所有權。</p><div className="ls-general-links"><a href="/privacy">隱私權政策</a><a href="/terms">服務條款</a><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Account%20Deletion">申請刪除帳號</a></div></div>
     {notice ? <p className="ls-general-notice" role="status">{notice}</p> : null}
   </section>;
 }

@@ -20,6 +20,14 @@
       "continue": true
     },
     {
+      "src": "/api/v2/preferences",
+      "dest": "/api/v2/bootstrap?resource=preferences"
+    },
+    {
+      "src": "/api/v2/planning",
+      "dest": "/api/v2/bootstrap?resource=planning"
+    },
+    {
       "src": "/api/v2/budgets",
       "dest": "/api/v2/bootstrap?resource=budgets"
     },

@@ -6,6 +6,8 @@ import {
 } from "../_shared/cloud.js";
 
 import budgetHandler from "../_shared/budget-handler.js";
+import preferencesHandler, { readPreferences } from "../_shared/preferences-handler.js";
+import planningHandler from "../_shared/planning-handler.js";
 
 const DEFAULT_CATEGORIES = [
   ["餐飲", "food"],
@@ -20,6 +22,8 @@ const DEFAULT_CATEGORIES = [
 
 export default async function handler(req, res) {
   if (req.query?.resource === "budgets") return budgetHandler(req, res);
+  if (req.query?.resource === "preferences") return preferencesHandler(req, res);
+  if (req.query?.resource === "planning") return planningHandler(req, res);
   if (req.query?.resource) return send(res, 400, { ok: false, error: "Unknown resource" });
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -70,7 +74,7 @@ export default async function handler(req, res) {
 
     const [{ data: profile, error: profileReadError },
       { data: accounts, error: accountsError },
-      { data: categories, error: categoriesError }] = await Promise.all([
+      { data: categories, error: categoriesError }, preferences] = await Promise.all([
       db.from("ledger_profiles")
         .select("user_id,locale,timezone,plan,created_at,updated_at")
         .eq("user_id", user.id)
@@ -83,6 +87,7 @@ export default async function handler(req, res) {
         .select("id,name,slug")
         .eq("user_id", user.id)
         .order("name", { ascending: true }),
+      readPreferences(db, user.id),
     ]);
     if (profileReadError) throw profileReadError;
     if (accountsError) throw accountsError;
@@ -91,6 +96,7 @@ export default async function handler(req, res) {
     return send(res, 200, {
       ok: true,
       profile,
+      preferences,
       accounts: accounts || [],
       categories: categories || [],
     });
