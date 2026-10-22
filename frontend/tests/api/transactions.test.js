@@ -14,7 +14,8 @@ process.env.SUPABASE_PUBLISHABLE_KEY = "publishable-test-key";
 function createState() {
   return {
     accounts: [
-      { id: "account-1", user_id: USER_ID, name: "玉山卡" },
+      { id: "account-1", user_id: USER_ID, name: "玉山卡", currency: "TWD" },
+      { id: "account-usd", user_id: USER_ID, name: "USD", currency: "USD" },
       { id: "account-2", user_id: OTHER_USER_ID, name: "別人的卡" },
     ],
     categories: [
@@ -184,6 +185,32 @@ test("manual transaction cannot attach another user's account", async () => {
   assert.equal(result.body.ok, false);
   assert.match(result.body.error, /Unknown account/);
   assert.equal(state.transactions.length, 0);
+});
+
+test("editing preserves ownership, historical purchase date and transfer classification", async () => {
+  const state = createState();
+  state.transactions.push({ id: "legacy", user_id: USER_ID, request_id: "legacy", currency: "TWD", amount_minor: -50000,
+    merchant: "Transfer", source: "statement", status: "confirmed", legacy_kind: "transfer", legacy_date: "2026-07-01",
+    updated_at: "2026-01-01T00:00:00Z", occurred_at: "2026-07-01T04:00:00Z" });
+  const changed = await invoke(state, "PATCH", { id: "legacy", amount: "400.25", date: "2026-07-02", expected_updated_at: "2026-01-01T00:00:00Z" });
+  assert.equal(changed.status, 200);
+  assert.equal(changed.body.transaction.amount_minor, -40025);
+  assert.equal(changed.body.transaction.legacy_date, "2026-07-02");
+  assert.equal(changed.body.transaction.legacy_kind, "transfer");
+  assert.equal(changed.body.transaction.source, "statement");
+  assert.equal((await invoke(state, "PATCH", { id: "legacy", amount: 1, expected_updated_at: "2026-01-01T00:00:00Z" })).status, 409);
+  assert.equal((await invoke(state, "PATCH", { id: "legacy", date: "2026-02-30" })).status, 400);
+  assert.equal((await invoke(state, "PATCH", { id: "legacy", account_id: "account-usd" })).status, 400);
+});
+
+test("pending amount defaults to expense and cannot be confirmed without complete fields", async () => {
+  const state = createState();
+  state.transactions.push({ id: "pending", user_id: USER_ID, currency: "TWD", amount_minor: null, merchant: null, status: "pending" });
+  assert.equal((await invoke(state, "PATCH", { id: "pending", status: "confirmed" })).status, 400);
+  const fixed = await invoke(state, "PATCH", { id: "pending", amount: "80", merchant: "Coffee", status: "confirmed" });
+  assert.equal(fixed.status, 200); assert.equal(fixed.body.transaction.amount_minor, -8000);
+  assert.equal(fixed.body.transaction.status, "confirmed");
+  assert.equal((await invoke(state, "POST", { amount: 1, merchant: "x", account_id: "account-usd", currency: "TWD" })).status, 400);
 });
 
 test("delete is scoped to the authenticated user", async () => {

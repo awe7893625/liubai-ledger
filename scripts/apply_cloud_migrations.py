@@ -22,6 +22,7 @@ def main() -> int:
     parser.add_argument("--env-file", required=True)
     parser.add_argument("--expected-project-ref", required=True)
     parser.add_argument("--sslrootcert", required=True)
+    parser.add_argument("--only", action="append", help="Apply only these exact migration basenames; no unrelated schema changes")
     args = parser.parse_args()
 
     env = dotenv_values(args.env_file)
@@ -34,6 +35,13 @@ def main() -> int:
         raise RuntimeError("Postgres project identity mismatch")
 
     files = sorted(MIGRATIONS.glob("*.sql"))
+    if args.only:
+        requested = set(args.only)
+        if any(Path(name).name != name for name in requested):
+            raise RuntimeError("Migration names must be basenames")
+        files = [path for path in files if path.name in requested]
+        if {path.name for path in files} != requested:
+            raise RuntimeError("Requested migration is missing")
     if not files:
         raise RuntimeError("No migrations found")
 

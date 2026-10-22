@@ -26,6 +26,8 @@ import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
 import { AccountSettings } from "./AccountSettings";
 import { SpendingInsights } from "./SpendingInsights";
+import { BudgetPanel } from "./BudgetPanel";
+import { TransactionEditor } from "./TransactionEditor";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
 import "./launch.css";
@@ -102,6 +104,7 @@ type CloudTransaction = {
   legacy_date?: string | null;
   legacy_kind?: "expense" | "income" | "refund" | "transfer" | "unknown" | null;
   legacy_description?: string | null;
+  updated_at?: string;
 };
 
 type AuthSessionPayload = {
@@ -282,11 +285,7 @@ export function CloudConnect() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
   const [editing, setEditing] = useState<CloudTransaction | null>(null);
-  const [editMerchant, setEditMerchant] = useState("");
-  const [editAmount, setEditAmount] = useState("");
-  const [editNote, setEditNote] = useState("");
-  const [editAccount, setEditAccount] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+
   const [merchant, setMerchant] = useState("");
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -306,7 +305,7 @@ export function CloudConnect() {
   const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
   const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
   const currencies = useMemo(() => [...new Set(["TWD", ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions]);
-  const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || tx.category_id === selectedCategory) && (!selectedStatus || tx.status === selectedStatus)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus]);
+  const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || tx.status === selectedStatus)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus]);
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
   const displayName = useMemo(() => {
@@ -329,7 +328,7 @@ export function CloudConnect() {
         loadAllLedgerPages<CloudTransaction>(async (offset, size) => {
           if (!current()) throw new Error("登入帳號已變更。");
           const result = await client.from("ledger_transactions")
-            .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note,legacy_date,legacy_kind,legacy_description", { count: "exact" })
+            .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note,legacy_date,legacy_kind,legacy_description,updated_at", { count: "exact" })
             .eq("user_id", owner)
             .order("occurred_at", { ascending: false }).order("id", { ascending: false })
             .range(offset, offset + size - 1);
@@ -368,6 +367,8 @@ export function CloudConnect() {
         setTicket(null); setIssuedRecoveryCode(""); setMessage(""); setDataError("");
         setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
+        setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus("");
+        setEditing(null);
         manualRequest.current = null; submitLock.current = false;
       }
       setSession(next); setAuthChecking(false);
@@ -556,29 +557,19 @@ export function CloudConnect() {
     }
   };
 
-  const beginEdit = (tx: CloudTransaction) => {
-    setEditing(tx); setEditMerchant(tx.merchant || "");
-    setEditAmount(tx.amount_minor === null ? "" : (Math.abs(tx.amount_minor) / 100).toFixed(2));
-    setEditNote(tx.note || ""); setEditAccount(tx.account_id || ""); setEditCategory(tx.category_id || "");
-  };
-
-  const saveEdit = async () => {
-    if (!session || !editing || busy) return;
-    if (!editMerchant.trim() || !/^\\d+(?:\\.\\d{1,2})?$/.test(editAmount) || Number(editAmount) <= 0) {
-      setMessage("請輸入有效的商家與金額。"); return;
-    }
+  const saveEdit = async (patch: Record<string, unknown>) => {
+    if (!session || !editing || busy) throw new Error("請等候目前操作完成。");
+    const owner = session.user.id; const id = editing.id;
     setBusy(true); setMessage("");
     try {
-      const result = await cloudRequest<{ok:boolean;transaction?:{id:string}}>("/api/v2/transactions", session, {
-        method:"PATCH", body:JSON.stringify({id:editing.id, merchant:editMerchant.trim(), amount:editAmount,
-          direction:(editing.amount_minor ?? 0) >= 0 ? "income":"expense", note:editNote,
-          account_id:editAccount || null, category_id:editCategory || null}),
+      const result = await cloudRequest<{ ok: boolean; transaction?: { id: string } }>("/api/v2/transactions", session, {
+        method: "PATCH", body: JSON.stringify({ ...patch, id }),
       });
-      if (!result.ok || result.transaction?.id !== editing.id) throw new Error("更新未確認");
+      if (!result.ok || result.transaction?.id !== id) throw new Error("更新未確認，請重新載入檢查。");
+      if (sessionUserRef.current !== owner) return;
       setEditing(null); setMessage("✅ 交易已更新。");
       await loadCloudData().catch(() => setMessage("已更新，請重新整理交易列表。"));
-    } catch (error) { setMessage(error instanceof Error ? `更新失敗：${error.message}` : "更新失敗"); }
-    finally { setBusy(false); }
+    } finally { if (sessionUserRef.current === owner) setBusy(false); }
   };
 
   const deleteTransaction = async (id: string) => {
@@ -677,19 +668,18 @@ export function CloudConnect() {
               <div className="ls-app-transaction-icon" data-source={tx.source}>
                 {tx.source === "apple_pay" ? <WalletCards size={17} /> : <Receipt size={17} />}
               </div>
-              <div className="ls-app-transaction-copy">
+              <button type="button" className="ls-app-transaction-copy ls-transaction-open" aria-label={`編輯 ${tx.merchant || "交易"}`} title={tx.merchant || "交易"} disabled={busy} onClick={() => setEditing(tx)}>
                 <strong>{tx.merchant || "未取得商家"}</strong>
                 <small>
                   {transactionTimeLabel(tx)}
                   {category ? ` · ${category.name}` : ""}
                   {account ? ` · ${account.name}` : tx.card_label ? ` · ${tx.card_label}` : ""}
                 </small>
-              </div>
+              </button>
               <div className="ls-app-transaction-amount">
                 <strong>{moneyLabel(tx)}</strong>
                 <span data-status={tx.source === "apple_pay" && !tx.account_id ? "pending" : tx.status}>{tx.source === "apple_pay" && !tx.account_id ? "卡片待對應" : statusLabel(tx.status)}</span>
               </div>
-              <button type="button" className="ls-app-transaction-edit" aria-label={`編輯 ${tx.merchant || "交易"}`} disabled={busy} onClick={() => beginEdit(tx)}>編輯</button>
               <button
                 type="button"
                 className="ls-app-transaction-delete"
@@ -733,7 +723,7 @@ export function CloudConnect() {
           </header>
 
           <div className="ls-app-main">
-            {editing ? <div className="ls-edit-overlay" role="presentation"><section className="ls-edit-sheet" role="dialog" aria-modal="true" aria-label="編輯交易"><h2>編輯交易</h2><p>修改商家、金額、分類及帳戶；原始記帳來源不變。</p><label>商家<input aria-label="編輯商家" value={editMerchant} onChange={(e)=>setEditMerchant(e.target.value)} /></label><label>金額<input aria-label="編輯金額" inputMode="decimal" value={editAmount} onChange={(e)=>setEditAmount(e.target.value)} /></label><label>分類<select aria-label="編輯分類" value={editCategory} onChange={(e)=>setEditCategory(e.target.value)}><option value="">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>帳戶<select aria-label="編輯帳戶" value={editAccount} onChange={(e)=>setEditAccount(e.target.value)}><option value="">未指定</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>備註<textarea aria-label="編輯備註" value={editNote} onChange={(e)=>setEditNote(e.target.value)} /></label><div className="ls-edit-actions"><button type="button" className="ls-button ls-secondary" disabled={busy} onClick={()=>setEditing(null)}>取消</button><button type="button" className="ls-button ls-primary" disabled={busy} onClick={()=>void saveEdit()}>{busy?"儲存中…":"儲存變更"}</button></div></section></div> : null}
+            {editing ? <TransactionEditor key={`${session.user.id}-${editing.id}`} transaction={editing} accounts={accounts} categories={categories} onSave={saveEdit} onClose={() => { if (!busy) setEditing(null); }} /> : null}
             {dataError ? <div className="ls-load-error" role="alert"><div><strong>帳本尚未完整更新</strong><p>{dataError}{loadedAt ? " 下方保留上次成功載入的資料。" : " 這不代表帳本沒有交易。"}</p></div><button type="button" className="ls-button ls-secondary" disabled={dataLoading} onClick={() => void loadCloudData().catch(() => {})}>重試載入</button></div> : null}
             {dataLoading ? <p className="ls-load-state" role="status">正在同步帳本…</p> : null}
             {issuedRecoveryCode ? (
@@ -798,6 +788,7 @@ export function CloudConnect() {
                   )}
                 </section>
 
+                <details className="ls-month-tools"><summary>月預算與分類額度 · {overviewMonth}</summary><BudgetPanel key={`budget-home-${session.user.id}-${overviewMonth}-${overviewCurrency}`} session={session} month={overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details>
                 <section className="ls-app-quick-grid">
                   <button type="button" onClick={() => setActiveTab("capture")}><span><Plus size={18} /></span><strong>快速記帳</strong><small>新增一筆支出</small></button>
                   <button type="button" onClick={() => setActiveTab("transactions")}><span><BarChart3 size={18} /></span><strong>交易紀錄</strong><small>查看全部流水</small></button>
@@ -839,9 +830,9 @@ export function CloudConnect() {
                     <RefreshCw size={16} /> 重新整理
                   </button>
                 </section>
-                {loadedAt && !dataError ? <SpendingInsights transactions={transactions} month={overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id);setFilterMonth(overviewMonth);setActiveTab("transactions");}} /> : null}
-                <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
-                <div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option></select></label></div>
+                {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整帳本；下方商家、帳戶篩選只影響明細。</p><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><BudgetPanel key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}
+                <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); if (event.target.value) setOverviewMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
+                <div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option><option value="__uncategorized__">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option></select></label></div>
                 <section className="ls-app-panel">
                   {!loadedAt ? <p className="ls-load-state">{dataError ? "尚未載入，請按重試；不是空白帳本。" : "正在載入交易…"}</p> : filteredTransactions.length > 0 ? <>{renderTransactionRows(filteredTransactions.slice(0, visibleCount))}{filteredTransactions.length > visibleCount ? <button className="ls-button ls-secondary ls-load-more" onClick={() => setVisibleCount((count) => count + 100)}>顯示更多（尚有 {filteredTransactions.length - visibleCount} 筆）</button> : null}</> : (
                     <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>{transactions.length ? "沒有符合的交易" : "還沒有交易"}</strong><p>{transactions.length ? "試試其他月份或搜尋文字。" : "新增第一筆後，交易會出現在這裡。"}</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記一筆</button></div>
