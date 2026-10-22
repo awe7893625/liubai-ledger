@@ -157,6 +157,12 @@ function moneyFromMinor(amountMinor: number, currency = "TWD"): string {
   return currency === "TWD" ? `${sign}NT$${absolute}` : `${sign}${currency} ${absolute}`;
 }
 
+function absoluteMoneyFromMinor(amountMinor: number, currency = "TWD"): string {
+  const amount = Math.abs(amountMinor) / 100;
+  const absolute = amount.toLocaleString("zh-TW", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return currency === "TWD" ? `NT$${absolute}` : `${currency} ${absolute}`;
+}
+
 function moneyLabel(tx: CloudTransaction): string {
   if (tx.amount_minor === null) return "待補金額";
   return moneyFromMinor(tx.amount_minor, tx.currency);
@@ -611,8 +617,8 @@ export function CloudConnect() {
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
                   <div>
-                    <p>我的帳本</p>
-                    <h1>{displayName}</h1>
+                    <p>{displayName}</p>
+                    <h1>我的帳本</h1>
                     <span>今天的支出、最近交易，都在這裡。</span>
                   </div>
                   <button className="ls-button ls-primary ls-app-primary-action" type="button" onClick={() => setActiveTab("capture")}>
@@ -623,12 +629,12 @@ export function CloudConnect() {
                 <section className="ls-app-stat-grid" aria-label="本月總覽">
                   <article className="ls-app-stat ls-app-stat-primary">
                     <span>本月支出</span>
-                    <strong>{moneyFromMinor(Math.abs(monthExpense))}</strong>
+                    <strong>{absoluteMoneyFromMinor(monthExpense)}</strong>
                     <small>{monthTransactions.length} 筆交易</small>
                   </article>
                   <article className="ls-app-stat">
                     <span>本月收入</span>
-                    <strong>{moneyFromMinor(monthIncome)}</strong>
+                    <strong>{absoluteMoneyFromMinor(monthIncome)}</strong>
                     <small>已確認交易</small>
                   </article>
                   <article className="ls-app-stat">

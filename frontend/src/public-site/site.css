@@ -4035,6 +4035,10 @@
   color: var(--ls-faint);
   font-size: 0.75rem;
 }
+.ls-app-account-card .ls-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .ls-app-recovery-banner {
   display: flex;
   align-items: center;
@@ -4099,6 +4103,7 @@
   }
   .ls-app-page {
     gap: 13px;
+    padding-bottom: 74px;
   }
   .ls-app-page-head {
     align-items: center;
