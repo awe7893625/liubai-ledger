@@ -81,7 +81,7 @@ type PairStart = {
 type CloudTransaction = {
   id: string;
   request_id: string;
-  source: "apple_pay" | "manual" | "notification" | "statement";
+  source: "apple_pay" | "manual" | "notification" | "statement" | "capture" | "email";
   amount_minor: number | null;
   currency: string;
   merchant: string | null;
@@ -91,6 +91,9 @@ type CloudTransaction = {
   account_id: string | null;
   category_id: string | null;
   note: string | null;
+  legacy_date?: string | null;
+  legacy_kind?: "expense" | "income" | "refund" | "transfer" | "unknown" | null;
+  legacy_description?: string | null;
 };
 
 type AuthSessionPayload = {
@@ -168,6 +171,11 @@ function moneyLabel(tx: CloudTransaction): string {
   return moneyFromMinor(tx.amount_minor, tx.currency);
 }
 
+function transactionTimeLabel(tx: CloudTransaction): string {
+  if (tx.legacy_date) return tx.legacy_date.replace(/-/g, "/");
+  return timeLabel(tx.occurred_at);
+}
+
 function statusLabel(status: CloudTransaction["status"]): string {
   return status === "confirmed" ? "已記帳" : status === "pending" ? "待確認" : status === "duplicate" ? "重複" : "需處理";
 }
@@ -176,7 +184,10 @@ function sourceLabel(source: CloudTransaction["source"]): string {
   if (source === "apple_pay") return "Apple Pay";
   if (source === "manual") return "手動";
   if (source === "notification") return "通知";
-  return "對帳";
+  if (source === "capture") return "舊帳本記帳";
+  if (source === "email") return "郵件入帳";
+  if (source === "statement") return "帳單匯入";
+  return "其他";
 }
 
 async function publicRequest<T>(path: string, body: Record<string, unknown>): Promise<T> {
@@ -248,16 +259,26 @@ export function CloudConnect() {
   const monthTransactions = useMemo(() => {
     const now = new Date();
     return transactions.filter((tx) => {
-      const when = new Date(tx.occurred_at);
-      return when.getFullYear() === now.getFullYear() && when.getMonth() === now.getMonth();
+      const when = tx.legacy_date
+        ? tx.legacy_date.slice(0, 7)
+        : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit" }).format(new Date(tx.occurred_at));
+      const current = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit" }).format(now);
+      return when === current;
     });
   }, [transactions]);
   const monthExpense = useMemo(
-    () => monthTransactions.reduce((sum, tx) => sum + Math.min(tx.amount_minor ?? 0, 0), 0),
+    () => monthTransactions.reduce((sum, tx) => {
+      if (tx.legacy_kind === "transfer") return sum;
+      if (tx.legacy_kind === "refund") return sum + (tx.amount_minor ?? 0);
+      return sum + Math.min(tx.amount_minor ?? 0, 0);
+    }, 0),
     [monthTransactions],
   );
   const monthIncome = useMemo(
-    () => monthTransactions.reduce((sum, tx) => sum + Math.max(tx.amount_minor ?? 0, 0), 0),
+    () => monthTransactions.reduce((sum, tx) => {
+      if (tx.legacy_kind === "transfer" || tx.legacy_kind === "refund") return sum;
+      return sum + Math.max(tx.amount_minor ?? 0, 0);
+    }, 0),
     [monthTransactions],
   );
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
@@ -281,13 +302,23 @@ export function CloudConnect() {
       cloudRequest<{ ok: boolean; devices: Device[] }>("/api/v2/devices", session),
       supabase
         .from("ledger_transactions")
+        .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note,legacy_date,legacy_kind,legacy_description")
+        .order("occurred_at", { ascending: false })
+        .limit(1000),
+    ]);
+    let availableTransactions: CloudTransaction[] = (transactionResult.data ?? []) as unknown as CloudTransaction[];
+    if (transactionResult.error) {
+      // Keep the public app usable during rolling schema deployments.
+      const oldSchema = await supabase
+        .from("ledger_transactions")
         .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note")
         .order("occurred_at", { ascending: false })
-        .limit(200),
-    ]);
-    if (transactionResult.error) throw transactionResult.error;
+        .limit(1000);
+      if (oldSchema.error) throw oldSchema.error;
+      availableTransactions = (oldSchema.data ?? []) as unknown as CloudTransaction[];
+    }
     setDevices(deviceResult.devices ?? []);
-    setTransactions((transactionResult.data ?? []) as CloudTransaction[]);
+    setTransactions(availableTransactions);
   }, [session]);
 
   useEffect(() => {
@@ -550,7 +581,7 @@ export function CloudConnect() {
               <div className="ls-app-transaction-copy">
                 <strong>{tx.merchant || "未取得商家"}</strong>
                 <small>
-                  {timeLabel(tx.occurred_at)}
+                  {transactionTimeLabel(tx)}
                   {category ? ` · ${category.name}` : ""}
                   {account ? ` · ${account.name}` : tx.card_label ? ` · ${tx.card_label}` : ""}
                 </small>
@@ -697,7 +728,7 @@ export function CloudConnect() {
             {activeTab === "transactions" ? (
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
-                  <div><p>Ledger</p><h1>交易紀錄</h1><span>目前載入最近 {transactions.length} 筆。</span></div>
+                  <div><p>Ledger</p><h1>交易紀錄</h1><span>已載入 {transactions.length} 筆；歷史交易依原始日期排列。</span></div>
                   <button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void loadCloudData().catch(() => setMessage("重新整理失敗，請稍後再試。"))}>
                     <RefreshCw size={16} /> 重新整理
                   </button>
@@ -1070,7 +1101,7 @@ export function CloudConnect() {
                         <div className="ls-cloud-tx-main">
                           <strong>{tx.merchant || "未取得商家"}</strong>
                           <small>
-                            {timeLabel(tx.occurred_at)} · {sourceLabel(tx.source)}
+                            {transactionTimeLabel(tx)} · {sourceLabel(tx.source)}
                             {category ? ` · ${category.name}` : ""}
                             {account ? ` · ${account.name}` : tx.card_label ? ` · ${tx.card_label}` : ""}
                           </small>
