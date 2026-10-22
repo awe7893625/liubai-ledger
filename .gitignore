@@ -33,6 +33,9 @@ logs/
 shortcuts/source/Liubai-Cloud.unsigned.shortcut
 shortcuts/source/Liubai-Cloud-preview.shortcut
 
+# Public non-secret build identity (generated during build)
+frontend/public/version.json
+
 # Supabase CLI local state
 cloud/supabase/.temp/
 cloud/supabase/.branches/
