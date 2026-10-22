@@ -100,7 +100,7 @@ export function ShortcutOnboarding({ session, compact = false, pairingBusy, onPa
   </section>;
 
   return <section className="ls-shortcut-setup" aria-label="捷徑與 Apple Pay 設定流程">
-    <header><div><p>Apple Pay 自動記帳</p><h2>{heading}</h2><span>先確認這支 iPhone 能把交易存進自己的帳本，再接上付款觸發。</span></div>
+    <header><div><p>Apple Pay 自動記帳</p><h2>{heading}</h2><span>先確認這支 iPhone 能把交易存進自己的帳本，再接上付款觸發。</span>{manualPassed && fresh ? <div className="ls-shortcut-actions"><a className="ls-button ls-primary" href="#ledger-wallet-setup">前往 Apple Pay 設定<ChevronRight size={15} /></a></div> : null}</div>
       <button type="button" className="ls-button ls-secondary" onClick={() => void refresh()} disabled={checking}><RefreshCw size={15} />{checking ? "確認中…" : "更新測試結果"}</button></header>
     {error ? <p className="ls-shortcut-error" role="alert">{error} 舊進度僅供參考，請更新後繼續。</p> : null}
     {active.length > 0 ? <label className="ls-shortcut-device">正在設定的裝置<select aria-label="正在設定的裝置" value={selected?.id || ""} onChange={(e) => { setSelectedId(e.target.value); setWatching(false); }}>
@@ -127,7 +127,7 @@ export function ShortcutOnboarding({ session, compact = false, pairingBusy, onPa
       </div>
     </article>
 
-    <article className="ls-shortcut-step" data-complete={walletReceived && !progress?.wallet_receipt?.needs_review}>
+    <article id="ledger-wallet-setup" className="ls-shortcut-step" data-complete={walletReceived && !progress?.wallet_receipt?.needs_review}>
       <span className="ls-shortcut-number">3</span>
       <div><h3>接上 Apple Pay 交易自動化</h3>
         {!manualPassed || !fresh ? <><p>手動捷徑成功入帳後，這裡會開放 Apple Pay 的設定教學。</p><button className="ls-button ls-secondary" type="button" disabled>完成上一個步驟後繼續</button></>

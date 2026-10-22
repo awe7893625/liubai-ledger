@@ -31,7 +31,7 @@ with sync_playwright() as pw:
             def handle(route):
                 url=urlparse(route.request.url);path=url.path
                 def fulfill(data,status=200,headers=None):
-                    route.fulfill(status=status,body=json.dumps(data),headers={'Content-Type':'application/json','Cache-Control':'no-store',**(headers or {})})
+                    route.fulfill(status=status,body=json.dumps(data),headers={'Content-Type':'application/json','Cache-Control':'no-store','Access-Control-Allow-Origin':'http://127.0.0.1:5194','Access-Control-Allow-Headers':'*','Access-Control-Expose-Headers':'Content-Range',**(headers or {})})
                 devices=[{'id':'phone-a','name':'測試 iPhone A','created_at':NOW,'last_seen_at':NOW,'revoked_at':NOW if state['revoked'] else None},
                          {'id':'phone-b','name':'測試 iPhone B','created_at':NOW,'last_seen_at':None,'revoked_at':None}]
                 if path=='/api/v2/bootstrap':
@@ -54,7 +54,7 @@ with sync_playwright() as pw:
                     fulfill(result);return
                 if path=='/api/v2/accounts':fulfill({'ok':True,'accounts':[{'id':'account','name':'測試付款方式','type':'card','currency':'TWD','card_aliases':[]} ]});return
                 if path.startswith('/rest/v1/ledger_transactions'):
-                    fulfill([],headers={'Content-Range':'*/0'});return
+                    fulfill([],headers={'Content-Range':'0-0/0'});return
                 if path.startswith('/auth/v1/user'):fulfill(user);return
                 # Do not pass any unknown API/auth/data request to a real server.
                 if path.startswith(('/api/','/auth/','/rest/')):fulfill({'error':'Unexpected fixture request'},500);return
@@ -103,6 +103,8 @@ with sync_playwright() as pw:
             nav=page.locator('.ls-app-bottom-nav' if width<720 else '.ls-app-desktop-nav')
             nav.get_by_role('button',name='首頁',exact=True).click()
             page.get_by_role('region',name='Apple Pay 自動記帳入門',exact=True).wait_for()
+            page.locator('.ls-load-state',has_text='正在同步帳本').wait_for(state='hidden')
+            assert page.locator('.ls-load-error').count()==0, 'Fixture ledger count must be complete'
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             page.screenshot(path=str(OUT/f'home-{width}.png'),full_page=True)
             assert not errors,errors

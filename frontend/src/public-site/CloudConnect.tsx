@@ -891,12 +891,12 @@ export function CloudConnect() {
                 <span className="ls-auth-app-icon">留</span>
                 <div>
                   <strong>Ledger</strong>
-                  <small>你的私人記帳 App</small>
+                  <small>捷徑 × Apple Pay 記帳</small>
                 </div>
               </div>
               <div className="ls-auth-title">
                 <h2>{authMode === "signup" ? "建立你的帳本" : authMode === "recover" ? "找回你的帳號" : "歡迎回來"}</h2>
-                <p>{authMode === "signup" ? "免費開始，不需要綁信用卡。" : authMode === "recover" ? "使用你的復原碼設定新密碼。" : "登入後繼續使用你的 Ledger。"}</p>
+                <p>{authMode === "signup" ? "免費開始，不需要綁信用卡。" : authMode === "recover" ? "使用你的復原碼設定新密碼。" : "先用手動捷徑成功記一筆，再設定 Apple Pay 自動記帳。"}</p>
               </div>
 
               {googleEnabled ? (
