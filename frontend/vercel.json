@@ -20,6 +20,10 @@
       "continue": true
     },
     {
+      "src": "/api/v2/budgets",
+      "dest": "/api/v2/bootstrap?resource=budgets"
+    },
+    {
       "handle": "filesystem"
     },
     {
