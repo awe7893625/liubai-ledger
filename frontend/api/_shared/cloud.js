@@ -169,14 +169,16 @@ export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSe
 
 export function normalizeAmount(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.round(value * 100);
+    const minor = Math.round(value * 100);
+    return Number.isSafeInteger(minor) ? minor : null;
   }
   if (typeof value !== "string") return null;
   const compact = value.trim().replaceAll(",", "").replaceAll(" ", "");
   const match = compact.match(/^([+-]?)[^\d.-]*(\d+(?:\.\d{1,2})?)$/);
   if (!match) return null;
   const amount = Number(`${match[1]}${match[2]}`);
-  return Number.isFinite(amount) ? Math.round(amount * 100) : null;
+  const minor = Math.round(amount * 100);
+  return Number.isSafeInteger(minor) ? minor : null;
 }
 
 export function normalizedMerchant(value) {

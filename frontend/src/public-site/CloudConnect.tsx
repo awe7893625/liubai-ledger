@@ -24,6 +24,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
+import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
+import "./launch.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
@@ -191,8 +193,18 @@ function sourceLabel(source: CloudTransaction["source"]): string {
   return "其他";
 }
 
+async function timedFetch(path: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 25000);
+  try { return await fetch(path, { ...init, signal: controller.signal }); }
+  catch (error) {
+    if (controller.signal.aborted) throw new Error("連線逾時，尚未確認結果。請保留內容並重試。");
+    throw error;
+  } finally { window.clearTimeout(timer); }
+}
+
 async function publicRequest<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(path, {
+  const response = await timedFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -207,7 +219,7 @@ async function cloudRequest<T>(
   session: Session,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(path, {
+  const response = await timedFetch(path, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -222,6 +234,14 @@ async function cloudRequest<T>(
 
 export function CloudConnect() {
   const [session, setSession] = useState<Session | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const sessionUserRef = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
+  const submitLock = useRef(false);
+  const manualRequest = useRef<ReturnType<typeof retryRequest<Record<string, unknown>>> | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup" | "recover">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -236,7 +256,9 @@ export function CloudConnect() {
   const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
   const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("tab") === "settings" || params.get("paired") === "1" ? "settings" : "home";
+    const tab = params.get("tab");
+    if (params.get("paired") === "1") return "settings";
+    return tab === "capture" || tab === "transactions" || tab === "settings" ? tab : "home";
   });
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -244,6 +266,12 @@ export function CloudConnect() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [amount, setAmount] = useState("");
+  const [direction, setDirection] = useState<"expense" | "income">("expense");
+  const [overviewMonth, setOverviewMonth] = useState(currentMonth);
+  const [overviewCurrency, setOverviewCurrency] = useState("TWD");
+  const [filterMonth, setFilterMonth] = useState("");
+  const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(100);
   const [merchant, setMerchant] = useState("");
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -260,31 +288,11 @@ export function CloudConnect() {
     [categories],
   );
   const activeDevices = useMemo(() => devices.filter((device) => !device.revoked_at), [devices]);
-  const monthTransactions = useMemo(() => {
-    const now = new Date();
-    return transactions.filter((tx) => {
-      const when = tx.legacy_date
-        ? tx.legacy_date.slice(0, 7)
-        : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit" }).format(new Date(tx.occurred_at));
-      const current = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit" }).format(now);
-      return when === current;
-    });
-  }, [transactions]);
-  const monthExpense = useMemo(
-    () => monthTransactions.reduce((sum, tx) => {
-      if (tx.legacy_kind === "transfer") return sum;
-      if (tx.legacy_kind === "refund") return sum + (tx.amount_minor ?? 0);
-      return sum + Math.min(tx.amount_minor ?? 0, 0);
-    }, 0),
-    [monthTransactions],
-  );
-  const monthIncome = useMemo(
-    () => monthTransactions.reduce((sum, tx) => {
-      if (tx.legacy_kind === "transfer" || tx.legacy_kind === "refund") return sum;
-      return sum + Math.max(tx.amount_minor ?? 0, 0);
-    }, 0),
-    [monthTransactions],
-  );
+  const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
+  const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
+  const currencies = useMemo(() => [...new Set(["TWD", ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions]);
+  const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById), [transactions, filterMonth, search, accountById, categoryById]);
+  const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
   const displayName = useMemo(() => {
     const raw = session?.user.user_metadata?.display_name;
@@ -293,43 +301,67 @@ export function CloudConnect() {
 
   const loadCloudData = useCallback(async () => {
     if (!supabase || !session) return;
-    const bootstrap = await cloudRequest<BootstrapResponse>("/api/v2/bootstrap", session, {
-      method: "POST",
-      body: "{}",
-    });
-    setAccounts(bootstrap.accounts ?? []);
-    setCategories(bootstrap.categories ?? []);
-    setAccountId((current) => current || bootstrap.accounts?.[0]?.id || "");
-    setCategoryId((current) => current || bootstrap.categories?.find((item) => item.slug === "other")?.id || bootstrap.categories?.[0]?.id || "");
-
-    const [deviceResult, transactionResult] = await Promise.all([
-      cloudRequest<{ ok: boolean; devices: Device[] }>("/api/v2/devices", session),
-      supabase
-        .from("ledger_transactions")
-        .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note,legacy_date,legacy_kind,legacy_description")
-        .order("occurred_at", { ascending: false })
-        .limit(1000),
-    ]);
-    let availableTransactions: CloudTransaction[] = (transactionResult.data ?? []) as unknown as CloudTransaction[];
-    if (transactionResult.error) {
-      // Keep the public app usable during rolling schema deployments.
-      const oldSchema = await supabase
-        .from("ledger_transactions")
-        .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note")
-        .order("occurred_at", { ascending: false })
-        .limit(1000);
-      if (oldSchema.error) throw oldSchema.error;
-      availableTransactions = (oldSchema.data ?? []) as unknown as CloudTransaction[];
+    const client = supabase;
+    const owner = session.user.id;
+    const generation = ++loadGeneration.current;
+    const current = () => sessionUserRef.current === owner && generation === loadGeneration.current;
+    setDataLoading(true);
+    setDataError("");
+    try {
+      const bootstrap = await cloudRequest<BootstrapResponse>("/api/v2/bootstrap", session, { method: "POST", body: "{}" });
+      const [deviceResult, rows] = await Promise.all([
+        cloudRequest<{ ok: boolean; devices: Device[] }>("/api/v2/devices", session),
+        loadAllLedgerPages<CloudTransaction>(async (offset, size) => {
+          if (!current()) throw new Error("登入帳號已變更。");
+          const result = await client.from("ledger_transactions")
+            .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note,legacy_date,legacy_kind,legacy_description", { count: "exact" })
+            .eq("user_id", owner)
+            .order("occurred_at", { ascending: false }).order("id", { ascending: false })
+            .range(offset, offset + size - 1);
+          if (result.error) throw new Error("交易載入失敗，請檢查網路後重試。");
+          return { rows: (result.data ?? []) as CloudTransaction[], total: result.count ?? -1 };
+        }),
+      ]);
+      if (!current()) return;
+      setAccounts(bootstrap.accounts ?? []);
+      setCategories(bootstrap.categories ?? []);
+      setAccountId((value) => bootstrap.accounts.some((a) => a.id === value) ? value : bootstrap.accounts[0]?.id || "");
+      setCategoryId((value) => bootstrap.categories.some((c) => c.id === value) ? value : bootstrap.categories.find((c) => c.slug === "other")?.id || "");
+      setDevices(deviceResult.devices ?? []);
+      setTransactions(rows);
+      setLoadedAt(new Date().toISOString());
+    } catch (error) {
+      if (current()) setDataError(error instanceof Error ? error.message : "帳本載入失敗，請重試。");
+      throw error;
+    } finally {
+      if (current()) setDataLoading(false);
     }
-    setDevices(deviceResult.devices ?? []);
-    setTransactions(availableTransactions);
   }, [session]);
 
   useEffect(() => {
-    if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => data.subscription.unsubscribe();
+    if (!supabase) { setAuthChecking(false); return; }
+    let disposed = false;
+    let authEventSeen = false;
+    const accept = (next: Session | null) => {
+      if (disposed) return;
+      const nextId = next?.user.id ?? null;
+      if (sessionUserRef.current !== nextId) {
+        sessionUserRef.current = nextId;
+        ++loadGeneration.current; // Old in-flight responses cannot re-populate another account.
+        setTransactions([]); setAccounts([]); setCategories([]); setDevices([]);
+        setAmount(""); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
+        setTicket(null); setIssuedRecoveryCode(""); setMessage(""); setDataError("");
+        setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
+        setSearch(""); setFilterMonth(""); setVisibleCount(100);
+        manualRequest.current = null; submitLock.current = false;
+      }
+      setSession(next); setAuthChecking(false);
+    };
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => { authEventSeen = true; accept(next); });
+    void supabase.auth.getSession().then(({ data: initial }) => { if (!authEventSeen) accept(initial.session); }).catch(() => {
+      if (!disposed) { setAuthChecking(false); setMessage("無法確認登入，請重新登入。"); }
+    });
+    return () => { disposed = true; data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -402,7 +434,7 @@ export function CloudConnect() {
 
   useEffect(() => {
     if (!session) return;
-    void loadCloudData().catch(() => setMessage("目前無法讀取雲端帳本資料。"));
+    void loadCloudData().catch(() => { /* Persistent inline error, never an empty-ledger success. */ });
   }, [session, loadCloudData]);
 
   const authenticate = async () => {
@@ -470,40 +502,41 @@ export function CloudConnect() {
   };
 
   const submitManual = async () => {
-    if (!session || !amount.trim() || !merchant.trim()) return;
-    setBusy(true);
-    setMessage("");
+    if (!session || submitLock.current || !amount.trim() || !merchant.trim()) return;
+    const value = Number(amount.trim());
+    const parsedDate = new Date(occurredAt);
+    if (!/^\d+(?:\.\d{1,2})?$/.test(amount.trim()) || value <= 0 || !Number.isSafeInteger(Math.round(value * 100))) {
+      setMessage("請輸入大於 0、最多兩位小數的金額。"); return;
+    }
+    if (Number.isNaN(parsedDate.getTime())) { setMessage("請選擇有效的交易時間。"); return; }
+    const owner = session.user.id;
+    submitLock.current = true;
+    setBusy(true); setMessage("");
+    const payload = { amount: value, merchant: merchant.trim(), account_id: accountId || null,
+      category_id: categoryId || null, occurred_at: parsedDate.toISOString(), note, direction, currency: captureCurrency };
+    manualRequest.current = retryRequest(manualRequest.current, payload, () => `web_${crypto.randomUUID()}`);
     try {
-      const parsedDate = new Date(occurredAt);
-      await cloudRequest("/api/v2/transactions", session, {
-        method: "POST",
-        body: JSON.stringify({
-          amount,
-          merchant,
-          account_id: accountId || null,
-          category_id: categoryId || null,
-          occurred_at: Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate.toISOString(),
-          note,
-          direction: "expense",
-          currency: "TWD",
-        }),
+      const result = await cloudRequest<{ ok: boolean; duplicate: boolean; transaction?: { id: string } }>("/api/v2/transactions", session, {
+        method: "POST", body: JSON.stringify({ ...manualRequest.current.body, request_id: manualRequest.current.requestId }),
       });
-      setAmount("");
-      setMerchant("");
-      setNote("");
-      setOccurredAt(dateTimeLocalValue());
-      setMessage("✅ 已記帳。");
-      await loadCloudData();
+      if (!result.ok || !result.transaction?.id) throw new Error("後端尚未確認入帳，請保留內容並重試。");
+      if (sessionUserRef.current !== owner) return;
+      manualRequest.current = null;
+      setAmount(""); setMerchant(""); setNote(""); setOccurredAt(dateTimeLocalValue());
+      setMessage(result.duplicate ? "✅ 這筆已記帳，沒有重複新增。" : "✅ 已記帳。");
       setActiveTab("home");
+      await loadCloudData().catch(() => setMessage("✅ 已入帳，但列表更新失敗。請重新整理，不必再記一次。"));
     } catch (error) {
-      setMessage(error instanceof Error ? `記帳失敗：${error.message}` : "記帳失敗，請稍後重試。");
+      if (sessionUserRef.current === owner) setMessage(error instanceof Error ? `尚未確認：${error.message}` : "尚未確認入帳，請保留內容並重試。");
     } finally {
-      setBusy(false);
+      if (sessionUserRef.current === owner) { submitLock.current = false; setBusy(false); }
     }
   };
 
   const deleteTransaction = async (id: string) => {
     if (!session) return;
+    const transaction = transactions.find((row) => row.id === id);
+    if (!window.confirm(`確定刪除「${transaction?.merchant || "這筆交易"}」？刪除後無法復原。`)) return;
     setBusy(true);
     setMessage("");
     try {
@@ -512,7 +545,7 @@ export function CloudConnect() {
         body: JSON.stringify({ id }),
       });
       setMessage("交易已刪除。");
-      await loadCloudData();
+      await loadCloudData().catch(() => setMessage("交易已刪除，請重新整理列表。"));
     } catch {
       setMessage("刪除失敗，請稍後重試。");
     } finally {
@@ -570,6 +603,20 @@ export function CloudConnect() {
       </main>
     );
   }
+
+  if (authChecking) {
+    return <main className="ledger-site"><section className="ls-connect-shell ls-wrap" role="status"><p>正在確認登入…</p></section></main>;
+  }
+
+  const exportTransactions = () => {
+    if (dataLoading || dataError || !loadedAt) return;
+    const csv = ledgerCsv(filteredTransactions, accountById, categoryById);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = `liubai-ledger-${filterMonth || "all"}.csv`; anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setMessage(`已匯出 ${filteredTransactions.length} 筆目前篩選的交易。`);
+  };
 
   if (session) {
     const renderTransactionRows = (items: CloudTransaction[]) => (
@@ -637,6 +684,8 @@ export function CloudConnect() {
           </header>
 
           <div className="ls-app-main">
+            {dataError ? <div className="ls-load-error" role="alert"><div><strong>帳本尚未完整更新</strong><p>{dataError}{loadedAt ? " 下方保留上次成功載入的資料。" : " 這不代表帳本沒有交易。"}</p></div><button type="button" className="ls-button ls-secondary" disabled={dataLoading} onClick={() => void loadCloudData().catch(() => {})}>重試載入</button></div> : null}
+            {dataLoading ? <p className="ls-load-state" role="status">正在同步帳本…</p> : null}
             {issuedRecoveryCode ? (
               <section className="ls-app-recovery-banner">
                 <div><strong>請先保存復原碼</strong><span>之後忘記密碼時會用到。</span></div>
@@ -661,15 +710,16 @@ export function CloudConnect() {
                   </button>
                 </section>
 
-                <section className="ls-app-stat-grid" aria-label="本月總覽">
+                <div className="ls-ledger-period"><label>總覽月份<select aria-label="總覽月份" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)}>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><label>幣別<select aria-label="總覽幣別" value={overviewCurrency} onChange={(event) => setOverviewCurrency(event.target.value)}>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><small>只計已確認交易；轉帳不列收支</small></div>
+                <section className="ls-app-stat-grid" aria-label="月份總覽">
                   <article className="ls-app-stat ls-app-stat-primary">
-                    <span>本月支出</span>
-                    <strong>{absoluteMoneyFromMinor(monthExpense)}</strong>
-                    <small>{monthTransactions.length} 筆交易</small>
+                    <span>{overviewMonth === currentMonth() ? "本月支出" : "當月支出"}</span>
+                    <strong>{loadedAt ? absoluteMoneyFromMinor(summary.expense, overviewCurrency) : "—"}</strong>
+                    <small>{summary.confirmed} 筆已確認{summary.pending ? ` · ${summary.pending} 筆待確認` : ""}{summary.refund ? ` · 退款 ${absoluteMoneyFromMinor(summary.refund, overviewCurrency)}` : ""}</small>
                   </article>
                   <article className="ls-app-stat">
-                    <span>本月收入</span>
-                    <strong>{absoluteMoneyFromMinor(monthIncome)}</strong>
+                    <span>{overviewMonth === currentMonth() ? "本月收入" : "當月收入"}</span>
+                    <strong>{loadedAt ? absoluteMoneyFromMinor(summary.income, overviewCurrency) : "—"}</strong>
                     <small>已確認交易</small>
                   </article>
                   <article className="ls-app-stat">
@@ -684,7 +734,7 @@ export function CloudConnect() {
                     <div><p>最近交易</p><h2>最新紀錄</h2></div>
                     <button type="button" onClick={() => setActiveTab("transactions")}>查看全部 <ChevronRight size={15} /></button>
                   </div>
-                  {recentTransactions.length > 0 ? renderTransactionRows(recentTransactions) : (
+                  {!loadedAt ? <p className="ls-load-state">{dataError ? "交易尚未載入，請重試。" : "正在載入交易…"}</p> : recentTransactions.length > 0 ? renderTransactionRows(recentTransactions) : (
                     <div className="ls-app-empty">
                       <span className="ls-app-empty-icon"><Receipt size={22} /></span>
                       <strong>還沒有交易</strong>
@@ -711,9 +761,10 @@ export function CloudConnect() {
                   <div><p>快速記帳</p><h1>記一筆</h1><span>填最少的欄位，幾秒就完成。</span></div>
                 </section>
                 <section className="ls-app-panel ls-app-capture-card">
+                  <div className="ls-direction-switch" role="group" aria-label="收支類型"><button type="button" aria-pressed={direction === "expense"} onClick={() => setDirection("expense")}>支出</button><button type="button" aria-pressed={direction === "income"} onClick={() => setDirection("income")}>收入</button></div>
                   <label className="ls-app-amount-field">
                     <span>金額</span>
-                    <div><small>NT$</small><input inputMode="decimal" placeholder="0" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus /></div>
+                    <div><small>{captureCurrency === "TWD" ? "NT$" : captureCurrency}</small><input aria-label="金額" inputMode="decimal" placeholder="0" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus /></div>
                   </label>
                   <div className="ls-app-form-grid">
                     <label className="ls-app-field ls-app-field-wide"><span>商家 / 項目</span><input placeholder="例如：午餐、Uber、咖啡" value={merchant} onChange={(event) => setMerchant(event.target.value)} /></label>
@@ -722,7 +773,7 @@ export function CloudConnect() {
                     <label className="ls-app-field"><span>時間</span><input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
                     <label className="ls-app-field ls-app-field-wide"><span>備註（選填）</span><input placeholder="可留白" value={note} onChange={(event) => setNote(event.target.value)} /></label>
                   </div>
-                  <button className="ls-button ls-primary ls-app-save" type="button" disabled={busy || !amount.trim() || !merchant.trim()} onClick={() => void submitManual()}>
+                  <button className="ls-button ls-primary ls-app-save" type="button" disabled={busy || dataLoading || Boolean(dataError) || !loadedAt || !amount.trim() || !merchant.trim()} onClick={() => void submitManual()}>
                     <CheckCircle2 size={17} /> {busy ? "儲存中…" : "儲存交易"}
                   </button>
                 </section>
@@ -732,14 +783,15 @@ export function CloudConnect() {
             {activeTab === "transactions" ? (
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
-                  <div><p>Ledger</p><h1>交易紀錄</h1><span>已載入 {transactions.length} 筆；歷史交易依原始日期排列。</span></div>
+                  <div><p>Ledger</p><h1>交易紀錄</h1><span>{loadedAt ? `共 ${transactions.length} 筆，符合篩選 ${filteredTransactions.length} 筆` : "正在載入帳本"}；依原始日期排列。</span></div>
                   <button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void loadCloudData().catch(() => setMessage("重新整理失敗，請稍後再試。"))}>
                     <RefreshCw size={16} /> 重新整理
                   </button>
                 </section>
+                <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
                 <section className="ls-app-panel">
-                  {transactions.length > 0 ? renderTransactionRows(transactions) : (
-                    <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>還沒有交易</strong><p>新增第一筆後，交易會出現在這裡。</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記第一筆</button></div>
+                  {!loadedAt ? <p className="ls-load-state">{dataError ? "尚未載入，請按重試；不是空白帳本。" : "正在載入交易…"}</p> : filteredTransactions.length > 0 ? <>{renderTransactionRows(filteredTransactions.slice(0, visibleCount))}{filteredTransactions.length > visibleCount ? <button className="ls-button ls-secondary ls-load-more" onClick={() => setVisibleCount((count) => count + 100)}>顯示更多（尚有 {filteredTransactions.length - visibleCount} 筆）</button> : null}</> : (
+                    <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>{transactions.length ? "沒有符合的交易" : "還沒有交易"}</strong><p>{transactions.length ? "試試其他月份或搜尋文字。" : "新增第一筆後，交易會出現在這裡。"}</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記一筆</button></div>
                   )}
                 </section>
               </div>
@@ -750,6 +802,7 @@ export function CloudConnect() {
                 <section className="ls-app-page-head">
                   <div><p>設定</p><h1>付款方式與 iPhone</h1><span>先設定自己的卡片，再安裝捷徑；平常直接記帳就好。</span></div>
                 </section>
+                <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
                 <PaymentSettings session={session} onChanged={loadCloudData} />
                 <section className="ls-app-settings-grid">
                   <article className="ls-app-setting-card">
