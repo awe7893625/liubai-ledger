@@ -37,10 +37,15 @@ python3 "$ROOT/scripts/check_planning_schema_ready.py" \
   --env-file "$FRONTEND/.env.saas.local" \
   --sslrootcert "$ROOT/.qa/supabase-prod-ca-2021.crt" \
   --expected-project-ref vhosvmnhdrzkhmkmptqg
-cd "$FRONTEND"
-vercel deploy --prod --yes --non-interactive
 cd "$ROOT"
-python3 - "$FRONTEND/public/shortcuts" <<'PY'
+if ! git diff --quiet HEAD -- frontend scripts; then
+  echo 'Refuse deployment of uncommitted application/source changes.' >&2; exit 1
+fi
+SOURCE_REVISION="$(git rev-parse HEAD)"
+cd "$FRONTEND"
+vercel deploy --prod --yes --non-interactive --build-env "LEDGER_BUILD_REVISION=$SOURCE_REVISION"
+cd "$ROOT"
+python3 - "$FRONTEND/public/shortcuts" "$SOURCE_REVISION" <<'PY'
 from pathlib import Path
 from urllib.request import Request,urlopen
 import hashlib,json,sys
@@ -50,6 +55,12 @@ for path in ['/connect','/privacy','/terms','/api/v2/health']:
   assert r.status==200
   if path.endswith('/health'):assert json.load(r)['ok']
  print('PASS',path)
+with urlopen(Request(base+'/version.json',headers={'User-Agent':'Mozilla/5.0 LedgerReleaseQA/1.0','Cache-Control':'no-cache'}),timeout=30) as r:
+ release=json.load(r)
+ assert release.get('product')=='liubai-ledger'
+ assert release.get('source_revision')==sys.argv[2], 'Deployed app revision does not match reviewed source'
+ assert 'no-store' in (r.headers.get('Cache-Control') or ''), 'Release identity must not be served stale'
+print('PASS published source revision',sys.argv[2][:12])
 for name in ['Liubai-Cloud.shortcut','Liubai-Manual.shortcut']:
  with urlopen(Request(base+'/shortcuts/'+name,headers={'User-Agent':'Mozilla/5.0 LedgerReleaseQA/1.0'}),timeout=30) as r:
   content=r.read(2_000_000)

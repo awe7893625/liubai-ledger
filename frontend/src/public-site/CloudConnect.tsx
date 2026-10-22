@@ -29,6 +29,10 @@ import { AccountSettings } from "./AccountSettings";
 import { defaultPreferences } from "./cloud-preferences";
 import type { CloudPreferences } from "./cloud-preferences";
 import "./app-theme.css";
+import { ServiceStatus } from "./ServiceStatus";
+import { AUTH_RETRY_KEY, AuthRequestError, cooldownLabel, publicAuthError, retryDeadline, routeForAuth, sanitizedCooldowns } from "./auth-feedback";
+import type { AuthCooldowns } from "./auth-feedback";
+import "./auth-feedback.css";
 import { CategorySettings } from "./CategorySettings";
 import { LedgerFreshness, LedgerHistory } from "./LedgerHistory";
 import { sortLedger, groupLedger } from "./ledger-view";
@@ -230,8 +234,12 @@ async function publicRequest<T>(path: string, body: Record<string, unknown>): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data?.error || `Cloud API ${response.status}`);
+  const data: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const route = routeForAuth(path);
+    throw new AuthRequestError(publicAuthError(response.status, data, route), response.status, route,
+      response.status === 429 ? retryDeadline(response.headers.get("Retry-After"), data, route) : null);
+  }
   return data as T;
 }
 
@@ -269,6 +277,28 @@ export function CloudConnect() {
   const submitLock = useRef(false);
   const manualRequest = useRef<ReturnType<typeof retryRequest<Record<string, unknown>>> | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup" | "recover">("login");
+  const [authCooldowns, setAuthCooldowns] = useState<AuthCooldowns>(() => {
+    try { return sanitizedCooldowns(JSON.parse(sessionStorage.getItem(AUTH_RETRY_KEY) || "{}")); }
+    catch { return {}; }
+  });
+  const cooldownRef = useRef(authCooldowns);
+  const authenticationLock = useRef(false);
+  const [authNow, setAuthNow] = useState(Date.now);
+  const recordAuthFailure = useCallback((error: unknown) => {
+    if (error instanceof AuthRequestError && error.retryAt) {
+      const next = { ...cooldownRef.current, [error.route]: error.retryAt };
+      cooldownRef.current = next; setAuthCooldowns(next); setAuthNow(Date.now());
+    }
+    setMessage(error instanceof Error ? error.message : "登入失敗，請稍後重試。");
+  }, []);
+  useEffect(() => {
+    try { sessionStorage.setItem(AUTH_RETRY_KEY, JSON.stringify(authCooldowns)); } catch { /* Backend limits still apply. */ }
+    if (session || !Object.values(authCooldowns).some((until) => until > Date.now())) return;
+    const timer = window.setInterval(() => setAuthNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [authCooldowns, session]);
+  const currentAuthDeadline = authCooldowns[authMode] || 0;
+  const authCoolingDown = currentAuthDeadline > authNow;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
@@ -446,7 +476,9 @@ export function CloudConnect() {
     let cancelled = false;
 
     const handleGoogleCredential = async (response: GoogleCredentialResponse) => {
-      if (!response.credential || cancelled) return;
+      if (!response.credential || cancelled || authenticationLock.current) return;
+      if ((cooldownRef.current.google || 0) > Date.now()) { setMessage("Google 登入仍在等待時間內，請稍後再試。"); return; }
+      authenticationLock.current = true;
       setGoogleSigningIn(true);
       setBusy(true);
       setMessage("");
@@ -462,8 +494,9 @@ export function CloudConnect() {
         if (error) throw error;
         setMessage("✅ 已使用 Google 登入。");
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Google 登入失敗，請稍後重試。");
+        recordAuthFailure(error);
       } finally {
+        authenticationLock.current = false;
         setBusy(false);
         setGoogleSigningIn(false);
       }
@@ -507,7 +540,7 @@ export function CloudConnect() {
       cancelled = true;
       existing?.removeEventListener("load", renderGoogle);
     };
-  }, [googleEnabled, session]);
+  }, [googleEnabled, session, recordAuthFailure]);
 
   useEffect(() => {
     if (!session) return;
@@ -531,7 +564,9 @@ export function CloudConnect() {
   }, [message]);
 
   const authenticate = async () => {
-    if (!supabase || !username.trim()) return;
+    if (!supabase || !username.trim() || authenticationLock.current) return;
+    if ((cooldownRef.current[authMode] || 0) > Date.now()) return;
+    authenticationLock.current = true;
     setBusy(true);
     setMessage("");
     try {
@@ -565,8 +600,9 @@ export function CloudConnect() {
       setPassword("");
       setMessage(authMode === "signup" ? "✅ 免費帳本已建立。請先保存復原碼。" : "✅ 已登入。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "登入失敗，請稍後重試。");
+      recordAuthFailure(error);
     } finally {
+      authenticationLock.current = false;
       setBusy(false);
     }
   };
@@ -940,7 +976,7 @@ export function CloudConnect() {
                   <div><p>設定</p><h1>帳號與設定</h1><span>管理帳號、安全、偏好與 iPhone 捷徑。</span></div>
                 </section>
                 <div className="ls-direction-switch" role="group" aria-label="設定分類"><button type="button" aria-pressed={settingsSection === "general"} onClick={() => setSettingsSection("general")}>一般設定</button><button type="button" aria-pressed={settingsSection === "payments"} onClick={() => setSettingsSection("payments")}>付款與分類</button><button type="button" aria-pressed={settingsSection === "shortcuts"} onClick={() => setSettingsSection("shortcuts")}>iPhone 捷徑</button></div>
-                {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} preferences={preferences} accounts={accounts} categories={categories} ready={Boolean(loadedAt) && !dataError} onPreferencesChanged={preferencesChanged} onSignOut={() => void signOutLocal()} /> : settingsSection === "payments" ? <><PaymentSettings session={session} onChanged={loadCloudData} /><CategorySettings key={session.user.id} session={session} categories={categories} onChanged={loadCloudData} /></> : <>
+                {settingsSection === "general" ? <><AccountSettings key={session.user.id} session={session} client={supabase!} preferences={preferences} accounts={accounts} categories={categories} ready={Boolean(loadedAt) && !dataError} onPreferencesChanged={preferencesChanged} onSignOut={() => void signOutLocal()} /><ServiceStatus key={`service-${session.user.id}`} /></> : settingsSection === "payments" ? <><PaymentSettings session={session} onChanged={loadCloudData} /><CategorySettings key={session.user.id} session={session} categories={categories} onChanged={loadCloudData} /></> : <>
                 <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
                 <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
                 <p className="lf-helper">信用卡與 Wallet 別名請到「付款與分類」管理，手動捷徑會讀取你自己的選項。</p>
@@ -1048,10 +1084,12 @@ export function CloudConnect() {
               <div className="ls-auth-divider"><span>或使用帳號密碼</span></div>
 
               <div className="ls-auth-tabs" role="tablist" aria-label="登入方式">
-                <button type="button" data-active={authMode === "login"} onClick={() => setAuthMode("login")}>登入</button>
-                <button type="button" data-active={authMode === "signup"} onClick={() => setAuthMode("signup")}>註冊</button>
+                <button type="button" disabled={busy} data-active={authMode === "login"} onClick={() => { setAuthMode("login"); setMessage(""); }}>登入</button>
+                <button type="button" disabled={busy} data-active={authMode === "signup"} onClick={() => { setAuthMode("signup"); setMessage(""); }}>註冊</button>
               </div>
 
+              {authCoolingDown ? <section className="ls-auth-cooldown" aria-label="驗證等待時間"><strong>{authMode === "signup" ? "註冊暫時受到保護性限流" : authMode === "recover" ? "帳號復原暫時受到限流" : "登入暫時受到限流"}</strong><p>{cooldownLabel(currentAuthDeadline, authNow)}</p><small>預計可重試時間：{new Date(currentAuthDeadline).toLocaleString("zh-TW")}。請不要反覆送出；這不代表交易資料遺失。</small></section> : null}
+              {(authCooldowns.google || 0) > authNow ? <p className="ls-auth-cooldown" role="status">Google 登入：{cooldownLabel(authCooldowns.google!, authNow)}。</p> : null}
               <div className="ls-auth-form">
                 <label className="ls-auth-field">
                   <span>帳號</span>
@@ -1084,13 +1122,13 @@ export function CloudConnect() {
                     <input type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder="至少 12 個字元" value={password} onChange={(event) => setPassword(event.target.value)} aria-label="密碼" minLength={12} maxLength={128} />
                   </label>
                 )}
-                <button className="ls-button ls-primary ls-auth-submit" disabled={busy || !username.trim() || (authMode === "recover" ? !recoveryCode.trim() || newPassword.length < 12 : password.length < 12)} onClick={() => void authenticate()}>
-                  {busy ? "處理中…" : authMode === "signup" ? "建立免費帳號" : authMode === "recover" ? "重設密碼" : "登入"}
+                <button className="ls-button ls-primary ls-auth-submit" disabled={busy || authCoolingDown || !username.trim() || (authMode === "recover" ? !recoveryCode.trim() || newPassword.length < 12 : password.length < 12)} onClick={() => void authenticate()}>
+                  {busy ? "處理中…" : authCoolingDown ? "請於等待時間結束後再試" : authMode === "signup" ? "建立免費帳號" : authMode === "recover" ? "重設密碼" : "登入"}
                 </button>
               </div>
 
               {authMode !== "signup" ? (
-                <button className="ls-auth-link" type="button" onClick={() => setAuthMode(authMode === "recover" ? "login" : "recover")}>
+                <button className="ls-auth-link" type="button" disabled={busy} onClick={() => { setAuthMode(authMode === "recover" ? "login" : "recover"); setMessage(""); }}>
                   {authMode === "recover" ? "回到登入" : "忘記密碼？"}
                 </button>
               ) : (

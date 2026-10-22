@@ -162,7 +162,27 @@ export async function consumeAuthRateLimit(db, req, route, maxAttempts, windowSe
     .eq("bucket_hash", bucketHash)
     .gte("created_at", since);
   if (countError) throw countError;
-  if ((count || 0) > maxAttempts) throw httpError(429, "Too many attempts. Try again later.");
+  if ((count || 0) > maxAttempts) {
+    // Preserve the existing limits and attempt accounting. Tell the client when
+    // another attempt can fit; repeated blocked attempts still consume the window.
+    const { data: retryBoundary, error: boundaryError } = await db
+      .from("ledger_auth_attempts")
+      .select("created_at")
+      .eq("route", route)
+      .eq("bucket_hash", bucketHash)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .range(maxAttempts - 1, maxAttempts - 1)
+      .maybeSingle();
+    const boundary = Date.parse(retryBoundary?.created_at || "");
+    const seconds = !boundaryError && Number.isFinite(boundary)
+      ? Math.ceil((boundary + windowSeconds * 1000 - Date.now()) / 1000) + 1
+      : windowSeconds;
+    const error = httpError(429, "Too many attempts. Try again later.");
+    error.retryAfterSeconds = Math.max(1, Math.min(windowSeconds, seconds));
+    error.code = "AUTH_RATE_LIMITED";
+    throw error;
+  }
 
   const retentionCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
   const { error: cleanupError } = await db
@@ -213,5 +233,12 @@ export function bodyOf(req) {
 export function handleError(res, error) {
   const status = Number(error?.status) || 500;
   if (status >= 500) console.error(error);
-  return send(res, status, { ok: false, error: status >= 500 ? "Internal error" : error.message });
+  const retry = Number(error?.retryAfterSeconds);
+  const limited = status === 429 && Number.isInteger(retry) && retry > 0 && retry <= 604800;
+  if (limited) res.setHeader("Retry-After", String(retry));
+  return send(res, status, {
+    ok: false,
+    error: status >= 500 ? "Internal error" : error.message,
+    ...(limited ? { code: "AUTH_RATE_LIMITED", retry_after_seconds: retry } : {}),
+  });
 }

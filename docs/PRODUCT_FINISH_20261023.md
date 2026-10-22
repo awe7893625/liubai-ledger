@@ -94,5 +94,24 @@ backup operations; full billing-cycle/balance and category-deletion parity.
 
 ## Production receipt
 
-Pending deployment and authenticated acceptance at authoring time. Replace this
-section with the actual receipt only after the checks have run.
+- Deployed source: `7b62613` (including preceding reviewed checkpoint commits).
+- Production: `dpl_ByknyXfchJuP7jaqCfNphfNUpExs`, READY, alias `app.blankspaces.uk`.
+- 38 API tests + 25 ledger/view tests PASS; TypeScript, lint, audit, build and
+  static release checks PASS.
+- 30 isolated browser scenarios PASS across all five viewport/engine targets.
+- 10 public production checks PASS: pages, health, unauthenticated rejection and
+  byte-identical signed Shortcut downloads.
+- Authenticated production acceptance **did not complete**: the first public
+  signup received HTTP 429. The report is retained as FAIL, no alternate signup
+  path was used, and the script did not proceed to protected category writes.
+  Do not describe public smoke/fixture tests as successful hosted persistence QA.
+- This release changes no existing private M4 data and performs no hosted DDL.
+
+The same application changes were merged into the planning/preferences candidate
+without removing its schema deployment guard. That candidate passed its 15
+isolated planning/preference browser cases and full check-only release suite;
+it was not deployed. It still needs an authorized hosted migration and actual
+hosted persistence acceptance. No blocked operation was retried.
+
+Evidence: `.qa/product-finish-20261023/public-smoke.json`,
+`browser/report.json`, `production/report.json`, and `deployment.log`.
