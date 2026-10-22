@@ -24,6 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
+import { AccountSettings } from "./AccountSettings";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
 import "./launch.css";
@@ -255,6 +256,7 @@ export function CloudConnect() {
   const [googleSigningIn, setGoogleSigningIn] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
+  const [settingsSection, setSettingsSection] = useState<"general" | "shortcuts">("general");
   const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
@@ -810,8 +812,10 @@ export function CloudConnect() {
             {activeTab === "settings" ? (
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
-                  <div><p>自動記帳設定</p><h1>從手動捷徑，到 Apple Pay</h1><span>先成功記一筆，再把每天的刷卡變成自動記帳。</span></div>
+                  <div><p>設定</p><h1>帳號與設定</h1><span>管理帳號、安全、偏好與 iPhone 捷徑。</span></div>
                 </section>
+                <div className="ls-direction-switch" role="group" aria-label="設定分類"><button type="button" aria-pressed={settingsSection === "general"} onClick={() => setSettingsSection("general")}>一般設定</button><button type="button" aria-pressed={settingsSection === "shortcuts"} onClick={() => setSettingsSection("shortcuts")}>iPhone 自動記帳</button></div>
+                {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} onSignOut={() => void supabase?.auth.signOut()} /> : <>
                 <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
                 <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={() => setActiveTab("settings")} />
                 <PaymentSettings session={session} onChanged={loadCloudData} />
@@ -824,9 +828,9 @@ export function CloudConnect() {
                 </section>
 
                 <section className="ls-app-account-card">
-                  <div><strong>帳號與安全</strong><p>裝置只可寫入交易與讀取自己的付款選項，不能讀帳本明細。憑證保存在 iCloud「捷徑」檔案夾，不要分享。</p></div>
-                  <button className="ls-button ls-secondary" type="button" onClick={() => void supabase?.auth.signOut()}><LogOut size={16} /> 登出</button>
+                  <div><strong>裝置權限</strong><p>裝置只可寫入交易和讀取自己的付款選項，不能讀帳本明細。</p></div>
                 </section>
+                </>}
               </div>
             ) : null}
           </div>
