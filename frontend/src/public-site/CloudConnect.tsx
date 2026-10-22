@@ -42,6 +42,8 @@ import { LedgerExplore } from "./LedgerExplore";
 import type { QuickDraft } from "./explore-data";
 import { BudgetPanel } from "./BudgetPanel";
 import { TransactionEditor } from "./TransactionEditor";
+import { TransactionReview } from "./TransactionReview";
+import { entryKind, entryDirection, ENTRY_LABELS, requiresReview } from "./transaction-integrity";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
 import "./launch.css";
@@ -203,7 +205,7 @@ function transactionTimeLabel(tx: CloudTransaction): string {
 }
 
 function statusLabel(status: CloudTransaction["status"]): string {
-  return status === "confirmed" ? "已記帳" : status === "pending" ? "待確認" : status === "duplicate" ? "重複" : "需處理";
+  return status === "confirmed" ? "已記帳" : status === "pending" ? "待確認" : status === "duplicate" ? "已排除重複" : "需處理";
 }
 
 function sourceLabel(source: CloudTransaction["source"]): string {
@@ -329,7 +331,7 @@ export function CloudConnect() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [amount, setAmount] = useState("");
   const [quickDraftActive, setQuickDraftActive] = useState(false);
-  const [direction, setDirection] = useState<"expense" | "income">("expense");
+  const [direction, setDirection] = useState<"expense" | "income" | "refund">("expense");
   const [overviewMonth, setOverviewMonth] = useState(currentMonth);
   const [overviewCurrency, setOverviewCurrency] = useState("TWD");
   const [filterMonth, setFilterMonth] = useState("");
@@ -339,6 +341,7 @@ export function CloudConnect() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState("");
   const [selectedSource, setSelectedSource] = useState("");
+  const [selectedKind, setSelectedKind] = useState("");
   const [sortOrder, setSortOrder] = useState<LedgerSort>("newest");
   const [visibleCount, setVisibleCount] = useState(100);
   const [editing, setEditing] = useState<CloudTransaction | null>(null);
@@ -363,11 +366,11 @@ export function CloudConnect() {
   const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
   const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
   const currencies = useMemo(() => [...new Set(["TWD", ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions]);
-  const matchingTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || tx.status === selectedStatus) && (!selectedCurrency || tx.currency.trim() === selectedCurrency) && (!selectedSource || tx.source === selectedSource)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus, selectedCurrency, selectedSource]);
+  const matchingTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || (selectedStatus === "__review__" ? requiresReview(tx) : tx.status === selectedStatus)) && (!selectedCurrency || tx.currency.trim() === selectedCurrency) && (!selectedSource || tx.source === selectedSource) && (!selectedKind || entryKind(tx) === selectedKind)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus, selectedCurrency, selectedSource, selectedKind]);
   const oneCurrency = new Set(matchingTransactions.map((tx) => tx.currency.trim())).size <= 1;
   const effectiveSort = sortOrder.startsWith("amount") && !oneCurrency ? "newest" : sortOrder;
   const filteredTransactions = useMemo(() => sortLedger(matchingTransactions, effectiveSort), [matchingTransactions, effectiveSort]);
-  const clearFilters = () => { setSearch(""); setFilterMonth(""); setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus(""); setSelectedCurrency(""); setSelectedSource(""); setSortOrder("newest"); setVisibleCount(100); }; 
+  const clearFilters = () => { setSearch(""); setFilterMonth(""); setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus(""); setSelectedCurrency(""); setSelectedSource(""); setSelectedKind(""); setSortOrder("newest"); setVisibleCount(100); };
   const showMonth = (month: string) => { clearFilters(); setOverviewMonth(month); setFilterMonth(month); setActiveTab("transactions"); };
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
@@ -427,7 +430,7 @@ export function CloudConnect() {
         sessionUserRef.current = nextId;
         ++loadGeneration.current; // Old in-flight responses cannot re-populate another account.
         setTransactions([]); setAccounts([]); setCategories([]); setDevices([]);
-        setAmount(""); setQuickDraftActive(false); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
+        setAmount(""); setDirection("expense"); setSelectedKind(""); setQuickDraftActive(false); setMerchant(""); setNote(""); setAccountId(""); setCategoryId("");
         setTicket(null); setIssuedRecoveryCode(""); setMessage(""); setDataError("");
         setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
@@ -619,7 +622,7 @@ export function CloudConnect() {
     submitLock.current = true;
     setBusy(true); setMessage("");
     const payload = { amount: value, merchant: merchant.trim(), account_id: accountId || null,
-      category_id: categoryId || null, occurred_at: parsedDate.toISOString(), note, direction, currency: captureCurrency };
+      category_id: categoryId || null, occurred_at: parsedDate.toISOString(), note, kind: direction, direction: entryDirection(direction), currency: captureCurrency };
     manualRequest.current = retryRequest(manualRequest.current, payload, () => `web_${crypto.randomUUID()}`);
     try {
       const result = await cloudRequest<{ ok: boolean; duplicate: boolean; transaction?: { id: string } }>("/api/v2/transactions", session, {
@@ -663,22 +666,25 @@ export function CloudConnect() {
   };
 
   const deleteTransaction = async (id: string) => {
-    if (!session) return;
+    if (!session || busy) return;
+    const owner = session.user.id;
     const transaction = transactions.find((row) => row.id === id);
+    if (!transaction) return;
     if (!window.confirm(`確定刪除「${transaction?.merchant || "這筆交易"}」？刪除後無法復原。`)) return;
     setBusy(true);
     setMessage("");
     try {
       await cloudRequest("/api/v2/transactions", session, {
         method: "DELETE",
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, expected_updated_at: transaction.updated_at }),
       });
+      if (sessionUserRef.current !== owner) return;
       setMessage("交易已刪除。");
       await loadCloudData().catch(() => setMessage("交易已刪除，請重新整理列表。"));
-    } catch {
-      setMessage("刪除失敗，請稍後重試。");
+    } catch (error) {
+      if (sessionUserRef.current === owner) setMessage(error instanceof Error ? `未刪除：${error.message}` : "刪除未確認，請重新整理。");
     } finally {
-      setBusy(false);
+      if (sessionUserRef.current === owner) setBusy(false);
     }
   };
 
@@ -768,13 +774,14 @@ export function CloudConnect() {
                 <strong>{tx.merchant || "未取得商家"}</strong>
                 <small>
                   {transactionTimeLabel(tx)}
+                  {["refund", "transfer"].includes(entryKind(tx)) ? ` · ${ENTRY_LABELS[entryKind(tx)]}` : ""}
                   {category ? ` · ${category.name}` : ""}
                   {account ? ` · ${account.name}` : tx.card_label ? ` · ${tx.card_label}` : ""}
                 </small>
               </button>
               <div className="ls-app-transaction-amount">
                 <strong>{moneyLabel(tx)}</strong>
-                <span data-status={tx.source === "apple_pay" && !tx.account_id ? "pending" : tx.status}>{tx.source === "apple_pay" && !tx.account_id ? "卡片待對應" : statusLabel(tx.status)}</span>
+                <span data-status={tx.status !== "duplicate" && tx.source === "apple_pay" && !tx.account_id ? "pending" : tx.status}>{tx.status !== "duplicate" && tx.source === "apple_pay" && !tx.account_id ? "卡片待對應" : statusLabel(tx.status)}</span>
               </div>
               <button
                 type="button"
@@ -906,7 +913,8 @@ export function CloudConnect() {
                 </section>
                 {quickDraftActive ? <p role="status" className="lx-warning">草稿已帶入，尚未記帳。時間先預填中午 12:00，請確認付款帳戶、分類與實際時間後儲存。</p> : null}
                 <section className="ls-app-panel ls-app-capture-card">
-                  <div className="ls-direction-switch" role="group" aria-label="收支類型"><button type="button" aria-pressed={direction === "expense"} onClick={() => setDirection("expense")}>支出</button><button type="button" aria-pressed={direction === "income"} onClick={() => setDirection("income")}>收入</button></div>
+                  <div className="ls-direction-switch ti-capture-kinds" role="group" aria-label="收支類型"><button type="button" aria-pressed={direction === "expense"} onClick={() => setDirection("expense")}>支出</button><button type="button" aria-pressed={direction === "income"} onClick={() => setDirection("income")}>收入</button><button type="button" aria-pressed={direction === "refund"} onClick={() => setDirection("refund")}>退款</button></div>
+                  {direction === "refund" ? <p className="ti-kind-note">輸入退回的正數金額；退款沖減淨支出，不列為收入。請選擇退款收到的帳戶與原消費分類。</p> : null}
                   <label className="ls-app-amount-field">
                     <span>金額</span>
                     <div><small>{captureCurrency === "TWD" ? "NT$" : captureCurrency}</small><input aria-label="金額" inputMode="decimal" placeholder="0" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus /></div>
@@ -934,8 +942,9 @@ export function CloudConnect() {
                   </button>
                 </section>
                 {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整雲端帳本；下方商家、帳戶篩選只影響明細。</p><LedgerHistory rows={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} onMonth={(month) => { showMonth(month); setSelectedCurrency(overviewCurrency); }} /><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><BudgetPanel key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}
+                <TransactionReview rows={transactions} ready={Boolean(loadedAt) && !dataError && !dataLoading} onEdit={(id) => { const row = transactions.find((item) => item.id === id); if (row && !busy) setEditing(row); }} onPending={() => { clearFilters(); setSelectedStatus("__review__"); }} />
                 <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); if (event.target.value) setOverviewMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
-                <details className="lf-more-filters"><summary>更多篩選與排序{selectedAccount || selectedCategory || selectedStatus || selectedCurrency || selectedSource ? " · 已套用" : ""}</summary><div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option><option value="__uncategorized__">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option><option value="error">需處理</option></select></label></div><div className="ls-transaction-toolbar"><label>幣別<select aria-label="篩選幣別" value={selectedCurrency} onChange={(event) => { setSelectedCurrency(event.target.value); setVisibleCount(100); }}><option value="">全部（不換算）</option>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><label>記帳來源<select aria-label="篩選來源" value={selectedSource} onChange={(event) => { setSelectedSource(event.target.value); setVisibleCount(100); }}><option value="">全部來源</option>{["manual", "apple_pay", "notification", "statement", "capture", "email"].map((source) => <option key={source} value={source}>{sourceLabel(source as CloudTransaction["source"])}</option>)}</select></label><label>排序<select aria-label="交易排序" value={effectiveSort} onChange={(event) => { setSortOrder(event.target.value as LedgerSort); setVisibleCount(100); }}><option value="newest">最新在前</option><option value="oldest">最舊在前</option><option value="amount_desc" disabled={!oneCurrency}>金額由大到小</option><option value="amount_asc" disabled={!oneCurrency}>金額由小到大</option></select></label></div>{!oneCurrency ? <p className="lf-helper">依金額排序需先篩選單一幣別，避免直接比較台幣與外幣。</p> : null}<button type="button" className="ls-button ls-secondary" onClick={clearFilters}>清除所有篩選</button></details>
+                <details className="lf-more-filters"><summary>更多篩選與排序{selectedAccount || selectedCategory || selectedStatus || selectedCurrency || selectedSource || selectedKind ? " · 已套用" : ""}</summary><div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option><option value="__uncategorized__">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="__review__">全部待核對</option><option value="pending">待確認</option><option value="duplicate">已排除重複</option><option value="error">需處理</option></select></label></div><div className="ls-transaction-toolbar"><label>幣別<select aria-label="篩選幣別" value={selectedCurrency} onChange={(event) => { setSelectedCurrency(event.target.value); setVisibleCount(100); }}><option value="">全部（不換算）</option>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><label>交易類型<select aria-label="篩選交易類型" value={selectedKind} onChange={(event) => { setSelectedKind(event.target.value); setVisibleCount(100); }}><option value="">全部類型</option>{Object.entries(ENTRY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>記帳來源<select aria-label="篩選來源" value={selectedSource} onChange={(event) => { setSelectedSource(event.target.value); setVisibleCount(100); }}><option value="">全部來源</option>{["manual", "apple_pay", "notification", "statement", "capture", "email"].map((source) => <option key={source} value={source}>{sourceLabel(source as CloudTransaction["source"])}</option>)}</select></label><label>排序<select aria-label="交易排序" value={effectiveSort} onChange={(event) => { setSortOrder(event.target.value as LedgerSort); setVisibleCount(100); }}><option value="newest">最新在前</option><option value="oldest">最舊在前</option><option value="amount_desc" disabled={!oneCurrency}>金額由大到小</option><option value="amount_asc" disabled={!oneCurrency}>金額由小到大</option></select></label></div>{!oneCurrency ? <p className="lf-helper">依金額排序需先篩選單一幣別，避免直接比較台幣與外幣。</p> : null}<button type="button" className="ls-button ls-secondary" onClick={clearFilters}>清除所有篩選</button></details>
                 <section className="ls-app-panel">
                   {!loadedAt ? <p className="ls-load-state">{dataError ? "尚未載入，請按重試；不是空白帳本。" : "正在載入交易…"}</p> : filteredTransactions.length > 0 ? <>{renderTransactionGroups(filteredTransactions.slice(0, visibleCount))}{filteredTransactions.length > visibleCount ? <button className="ls-button ls-secondary ls-load-more" onClick={() => setVisibleCount((count) => count + 100)}>顯示更多（尚有 {filteredTransactions.length - visibleCount} 筆）</button> : null}</> : (
                     <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>{transactions.length ? "沒有符合的交易" : "還沒有交易"}</strong><p>{transactions.length ? "試試其他月份或搜尋文字。" : "新增第一筆後，交易會出現在這裡。"}</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記一筆</button></div>
