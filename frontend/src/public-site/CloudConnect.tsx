@@ -28,6 +28,7 @@ import { AccountSettings } from "./AccountSettings";
 import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
 import "./launch.css";
+import "./mobile-polish.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
