@@ -64,8 +64,18 @@ verifies all rows for those IDs are gone. No real-user session is impersonated.
 - Pre-release local API + hosted DB: 11 checks pass, exact synthetic cleanup passes.
 - The initial mobile test revealed hidden delete controls; the failure report is
   preserved and the successful rerun is stored separately.
-- Public production verification is recorded separately in the ignored report
-  above. It must be PASS before declaring this release accepted.
+- Public production verification: **13 checks PASS** at the brand domain, with
+  both synthetic users deleted and zero remaining scoped rows.
+- Production deployment: `dpl_8bXPxNmUBQJNKSHA8GpU4E5m1Kwk`, READY.
+- Deployed source revision: `b24b848` (includes its preceding checkpoint commit).
+- Final ownership regression check: the pre-existing owner's transaction row
+  count and full-row SHA-256 are unchanged. No real-user records were edited.
+- All 10 public Ledger tables have RLS enabled. Sensitive identity/pair/recovery/
+  rate-limit helper tables remain unreadable by anon and authenticated roles.
+- Final private receipt: `.qa/public-launch-20261022/acceptance-final.json`.
+
+**Release decision: accept the web application as a free public beta.** Do not
+promote native Shortcuts execution or complete bank automation as verified.
 
 The browser checks exercise 390px and 1280px layouts, filtered export, lost POST
 acknowledgement replay, deletion cancellation, interrupted reads, and account
