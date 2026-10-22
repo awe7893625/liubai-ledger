@@ -98,6 +98,9 @@ def main():
                 assert page.locator('.ls-app-root').get_attribute('data-theme')=='dark'
                 assert page.locator('.ls-app-root').evaluate('(el)=>getComputedStyle(el).colorScheme')=='dark'
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                ratio=panel.get_by_role('button',name='重新載入設定',exact=True).evaluate('''el=>{const s=getComputedStyle(el);const lum=c=>{const rgb=c.match(/[\\d.]+/g).slice(0,3).map(v=>Number(v)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2]};const a=lum(s.color),b=lum(s.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)}''')
+                assert ratio>=4.5, 'Low-contrast secondary button'
+                page.evaluate('window.scrollTo(0,0)')
                 page.screenshot(path=str(OUT/f'preferences-dark-{engine}-{width}.png'),full_page=True)
                 nav=page.locator('.ls-app-bottom-nav' if width<=760 else '.ls-app-desktop-nav')
                 nav.get_by_role('button',name='首頁',exact=True).click()
@@ -155,6 +158,17 @@ def main():
                 page.screenshot(path=str(OUT/f'planner-dark-{engine}-{width}.png'),full_page=True)
                 assert not state['errors'],state['errors']
                 passed(f'{engine} {width}px February month-end, skip-only-one-period, no overflow or JS errors')
+                second.get_by_label('顯示暱稱',exact=True).fill('第二台裝置設定')
+                second.get_by_role('button',name='儲存一般設定',exact=True).click()
+                second.get_by_text('已儲存到雲端，設定立即生效；其他裝置重新載入即可同步。',exact=True).wait_for()
+                nav.get_by_role('button',name='設定',exact=True).click()
+                panel.get_by_role('button',name='儲存一般設定',exact=True).click()
+                panel.get_by_text('設定已被另一台裝置更新，請重新載入再修改',exact=True).wait_for()
+                panel.get_by_role('button',name='重新載入設定',exact=True).click()
+                page.wait_for_function('document.querySelector(\'[aria-label="顯示暱稱"]\').value === "第二台裝置設定"')
+                other.emulate_media(color_scheme='dark')
+                other.wait_for_function('document.querySelector(".ls-app-root").dataset.theme === "dark"')
+                passed(f'{engine} {width}px stale preferences refused; reload and system theme work')
             except Exception as error:
                 try:page.screenshot(path=str(OUT/f'failure-{engine}-{width}.png'),full_page=True)
                 except Exception:pass

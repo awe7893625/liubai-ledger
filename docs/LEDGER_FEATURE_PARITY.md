@@ -14,6 +14,15 @@ Updated: 2026-10-22. This is an acceptance inventory, not a completion percentag
 | Map | Existing private implementation inspected | Tenant-scoped map and location consent UX not yet migrated |
 | Assistant | No cloud AI claim | Tenant-scoped grounded answers, deterministic accounting, privacy-safe provider integration and cost controls |
 
+## New candidate, not deployed
+
+The 2026-10-22 planning/settings candidate adds one-time/monthly reservations,
+explicit links to existing payments, skip/pause lifecycle, budget deduction, and
+cloud-synced nickname/theme/default account/category. This is **not part of the
+live-site feature claim above**: its hosted migration invocation was safety-blocked
+and not retried. See `PLANNING_SETTINGS_CANDIDATE_20261022.md` for isolated API,
+PostgreSQL and browser evidence plus the production release gates.
+
 ## Release discipline
 
 Each shipped feature requires code + protocol/unit gates + synthetic browser

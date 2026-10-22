@@ -1,4 +1,8 @@
 /* Reuse the existing Ledger design-system tokens for all authenticated surfaces. */
+.ledger-site[data-theme] .ls-button{transition:transform .15s ease,border-color .15s ease}
+.ledger-site[data-theme] .ls-general-card .ls-button.ls-secondary{background:var(--ls-elevated);color:var(--ls-text);border-color:var(--ls-strong)}
+.ledger-site[data-theme] .ls-general-card .ls-button.ls-primary{background:var(--ls-accent-ink);color:var(--ls-bg);border-color:var(--ls-accent-ink)}
+.ledger-site[data-theme] .ls-ledger-period select{appearance:none;-webkit-appearance:none;min-height:44px;box-sizing:border-box;padding:10px 14px;border:1px solid var(--ls-strong);border-radius:11px;background:var(--ls-paper);color:var(--ls-text);font-size:16px}
 :root[data-ledger-theme=dark]{color-scheme:dark;background:#15161a} :root[data-ledger-theme=light]{color-scheme:light;background:#f3efe6}
 :root[data-ledger-theme=dark] body{background:#15161a}
 .ledger-site[data-theme] :is(.ls-general-card,.ls-general-notice,.ls-insights,.ls-edit-sheet){background:var(--ls-paper);border-color:var(--ls-line);color:var(--ls-text)}
