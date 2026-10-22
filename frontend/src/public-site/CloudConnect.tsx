@@ -1,18 +1,25 @@
 import { createClient, type Session } from "@supabase/supabase-js";
 import {
+  BarChart3,
   CheckCircle2,
+  ChevronRight,
   Cloud,
   Copy,
   CreditCard,
   Download,
+  Home,
   KeyRound,
   Link2,
   LogOut,
   Plus,
+  Receipt,
+  RefreshCw,
+  Settings2,
   ShieldCheck,
   Smartphone,
   Trash2,
   Unplug,
+  WalletCards,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
@@ -140,15 +147,19 @@ function dateTimeLocalValue(): string {
   return new Date(now.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function moneyLabel(tx: CloudTransaction): string {
-  if (tx.amount_minor === null) return "待補金額";
-  const amount = tx.amount_minor / 100;
+function moneyFromMinor(amountMinor: number, currency = "TWD"): string {
+  const amount = amountMinor / 100;
   const sign = amount < 0 ? "−" : amount > 0 ? "+" : "";
   const absolute = Math.abs(amount).toLocaleString("zh-TW", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  return tx.currency === "TWD" ? `${sign}NT$${absolute}` : `${sign}${tx.currency} ${absolute}`;
+  return currency === "TWD" ? `${sign}NT$${absolute}` : `${sign}${currency} ${absolute}`;
+}
+
+function moneyLabel(tx: CloudTransaction): string {
+  if (tx.amount_minor === null) return "待補金額";
+  return moneyFromMinor(tx.amount_minor, tx.currency);
 }
 
 function statusLabel(status: CloudTransaction["status"]): string {
@@ -202,8 +213,10 @@ export function CloudConnect() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
+  const [googleSigningIn, setGoogleSigningIn] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
+  const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "settings">("home");
   const [ticket, setTicket] = useState<PairStart | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [transactions, setTransactions] = useState<CloudTransaction[]>([]);
@@ -225,6 +238,27 @@ export function CloudConnect() {
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   );
+  const activeDevices = useMemo(() => devices.filter((device) => !device.revoked_at), [devices]);
+  const monthTransactions = useMemo(() => {
+    const now = new Date();
+    return transactions.filter((tx) => {
+      const when = new Date(tx.occurred_at);
+      return when.getFullYear() === now.getFullYear() && when.getMonth() === now.getMonth();
+    });
+  }, [transactions]);
+  const monthExpense = useMemo(
+    () => monthTransactions.reduce((sum, tx) => sum + Math.min(tx.amount_minor ?? 0, 0), 0),
+    [monthTransactions],
+  );
+  const monthIncome = useMemo(
+    () => monthTransactions.reduce((sum, tx) => sum + Math.max(tx.amount_minor ?? 0, 0), 0),
+    [monthTransactions],
+  );
+  const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
+  const displayName = useMemo(() => {
+    const raw = session?.user.user_metadata?.display_name;
+    return typeof raw === "string" && raw.trim() ? raw.trim() : "我的帳本";
+  }, [session]);
 
   const loadCloudData = useCallback(async () => {
     if (!supabase || !session) return;
@@ -243,7 +277,7 @@ export function CloudConnect() {
         .from("ledger_transactions")
         .select("id,request_id,source,amount_minor,currency,merchant,card_label,status,occurred_at,account_id,category_id,note")
         .order("occurred_at", { ascending: false })
-        .limit(30),
+        .limit(200),
     ]);
     if (transactionResult.error) throw transactionResult.error;
     setDevices(deviceResult.devices ?? []);
@@ -263,6 +297,7 @@ export function CloudConnect() {
 
     const handleGoogleCredential = async (response: GoogleCredentialResponse) => {
       if (!response.credential || cancelled) return;
+      setGoogleSigningIn(true);
       setBusy(true);
       setMessage("");
       try {
@@ -280,6 +315,7 @@ export function CloudConnect() {
         setMessage(error instanceof Error ? error.message : "Google 登入失敗，請稍後重試。");
       } finally {
         setBusy(false);
+        setGoogleSigningIn(false);
       }
     };
 
@@ -415,8 +451,9 @@ export function CloudConnect() {
       setMerchant("");
       setNote("");
       setOccurredAt(dateTimeLocalValue());
-      setMessage("✅ 已記帳。這筆資料只會出現在你的帳本。");
+      setMessage("✅ 已記帳。");
       await loadCloudData();
+      setActiveTab("home");
     } catch (error) {
       setMessage(error instanceof Error ? `記帳失敗：${error.message}` : "記帳失敗，請稍後重試。");
     } finally {
@@ -493,8 +530,239 @@ export function CloudConnect() {
     );
   }
 
+  if (session) {
+    const renderTransactionRows = (items: CloudTransaction[]) => (
+      <div className="ls-app-transaction-list">
+        {items.map((tx) => {
+          const account = tx.account_id ? accountById.get(tx.account_id) : null;
+          const category = tx.category_id ? categoryById.get(tx.category_id) : null;
+          return (
+            <article className="ls-app-transaction-row" key={tx.id}>
+              <div className="ls-app-transaction-icon" data-source={tx.source}>
+                {tx.source === "apple_pay" ? <WalletCards size={17} /> : <Receipt size={17} />}
+              </div>
+              <div className="ls-app-transaction-copy">
+                <strong>{tx.merchant || "未取得商家"}</strong>
+                <small>
+                  {timeLabel(tx.occurred_at)}
+                  {category ? ` · ${category.name}` : ""}
+                  {account ? ` · ${account.name}` : tx.card_label ? ` · ${tx.card_label}` : ""}
+                </small>
+              </div>
+              <div className="ls-app-transaction-amount">
+                <strong>{moneyLabel(tx)}</strong>
+                <span data-status={tx.status}>{statusLabel(tx.status)}</span>
+              </div>
+              <button
+                type="button"
+                className="ls-app-transaction-delete"
+                aria-label={`刪除 ${tx.merchant || "交易"}`}
+                disabled={busy}
+                onClick={() => void deleteTransaction(tx.id)}
+              >
+                <Trash2 size={15} />
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    );
+
+    const navItems = [
+      { id: "home" as const, label: "首頁", icon: Home },
+      { id: "capture" as const, label: "記一筆", icon: Plus },
+      { id: "transactions" as const, label: "交易", icon: Receipt },
+      { id: "settings" as const, label: "設定", icon: Settings2 },
+    ];
+
+    return (
+      <main className="ledger-site ls-app-root">
+        <section className="ls-app-shell">
+          <header className="ls-app-topbar">
+            <button className="ls-app-brand" type="button" onClick={() => setActiveTab("home")} aria-label="回到帳本首頁">
+              <span className="ls-brand-mark">留</span>
+              <span><strong>Ledger</strong><small>留白工作室</small></span>
+            </button>
+            <nav className="ls-app-desktop-nav" aria-label="帳本導覽">
+              {navItems.map(({ id, label, icon: Icon }) => (
+                <button key={id} type="button" data-active={activeTab === id} onClick={() => setActiveTab(id)}>
+                  <Icon size={16} /> {label}
+                </button>
+              ))}
+            </nav>
+            <button className="ls-app-signout" type="button" onClick={() => void supabase?.auth.signOut()}>
+              <LogOut size={16} /><span>登出</span>
+            </button>
+          </header>
+
+          <div className="ls-app-main">
+            {issuedRecoveryCode ? (
+              <section className="ls-app-recovery-banner">
+                <div><strong>請先保存復原碼</strong><span>之後忘記密碼時會用到。</span></div>
+                <div className="ls-recovery-actions">
+                  <button className="ls-button ls-secondary" type="button" onClick={() => void copyRecoveryCode()}><Copy size={15} /> 複製</button>
+                  <button className="ls-button ls-secondary" type="button" onClick={downloadRecoveryCode}><Download size={15} /> 下載</button>
+                  <button className="ls-button ls-primary" type="button" onClick={() => setIssuedRecoveryCode("")}>我已保存</button>
+                </div>
+              </section>
+            ) : null}
+
+            {activeTab === "home" ? (
+              <div className="ls-app-page">
+                <section className="ls-app-page-head">
+                  <div>
+                    <p>我的帳本</p>
+                    <h1>{displayName}</h1>
+                    <span>今天的支出、最近交易，都在這裡。</span>
+                  </div>
+                  <button className="ls-button ls-primary ls-app-primary-action" type="button" onClick={() => setActiveTab("capture")}>
+                    <Plus size={17} /> 記一筆
+                  </button>
+                </section>
+
+                <section className="ls-app-stat-grid" aria-label="本月總覽">
+                  <article className="ls-app-stat ls-app-stat-primary">
+                    <span>本月支出</span>
+                    <strong>{moneyFromMinor(Math.abs(monthExpense))}</strong>
+                    <small>{monthTransactions.length} 筆交易</small>
+                  </article>
+                  <article className="ls-app-stat">
+                    <span>本月收入</span>
+                    <strong>{moneyFromMinor(monthIncome)}</strong>
+                    <small>已確認交易</small>
+                  </article>
+                  <article className="ls-app-stat">
+                    <span>自動記帳</span>
+                    <strong>{activeDevices.length > 0 ? "已連接" : "未連接"}</strong>
+                    <small>{activeDevices.length > 0 ? `${activeDevices.length} 台裝置` : "可稍後設定"}</small>
+                  </article>
+                </section>
+
+                <section className="ls-app-panel">
+                  <div className="ls-app-panel-head">
+                    <div><p>最近交易</p><h2>最新紀錄</h2></div>
+                    <button type="button" onClick={() => setActiveTab("transactions")}>查看全部 <ChevronRight size={15} /></button>
+                  </div>
+                  {recentTransactions.length > 0 ? renderTransactionRows(recentTransactions) : (
+                    <div className="ls-app-empty">
+                      <span className="ls-app-empty-icon"><Receipt size={22} /></span>
+                      <strong>還沒有交易</strong>
+                      <p>先記第一筆，或連接 iPhone 開始自動記帳。</p>
+                      <div>
+                        <button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記第一筆</button>
+                        <button className="ls-button ls-secondary" type="button" onClick={() => setActiveTab("settings")}><Smartphone size={16} /> 連接 iPhone</button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <section className="ls-app-quick-grid">
+                  <button type="button" onClick={() => setActiveTab("capture")}><span><Plus size={18} /></span><strong>快速記帳</strong><small>新增一筆支出</small></button>
+                  <button type="button" onClick={() => setActiveTab("transactions")}><span><BarChart3 size={18} /></span><strong>交易紀錄</strong><small>查看全部流水</small></button>
+                  <button type="button" onClick={() => setActiveTab("settings")}><span><Smartphone size={18} /></span><strong>自動記帳</strong><small>{activeDevices.length ? "裝置已連接" : "設定 iPhone"}</small></button>
+                </section>
+              </div>
+            ) : null}
+
+            {activeTab === "capture" ? (
+              <div className="ls-app-page ls-app-page-narrow">
+                <section className="ls-app-page-head">
+                  <div><p>快速記帳</p><h1>記一筆</h1><span>填最少的欄位，幾秒就完成。</span></div>
+                </section>
+                <section className="ls-app-panel ls-app-capture-card">
+                  <label className="ls-app-amount-field">
+                    <span>金額</span>
+                    <div><small>NT$</small><input inputMode="decimal" placeholder="0" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus /></div>
+                  </label>
+                  <div className="ls-app-form-grid">
+                    <label className="ls-app-field ls-app-field-wide"><span>商家 / 項目</span><input placeholder="例如：午餐、Uber、咖啡" value={merchant} onChange={(event) => setMerchant(event.target.value)} /></label>
+                    <label className="ls-app-field"><span>分類</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>帳戶</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)}>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
+                    <label className="ls-app-field"><span>時間</span><input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
+                    <label className="ls-app-field ls-app-field-wide"><span>備註（選填）</span><input placeholder="可留白" value={note} onChange={(event) => setNote(event.target.value)} /></label>
+                  </div>
+                  <button className="ls-button ls-primary ls-app-save" type="button" disabled={busy || !amount.trim() || !merchant.trim()} onClick={() => void submitManual()}>
+                    <CheckCircle2 size={17} /> {busy ? "儲存中…" : "儲存交易"}
+                  </button>
+                </section>
+              </div>
+            ) : null}
+
+            {activeTab === "transactions" ? (
+              <div className="ls-app-page">
+                <section className="ls-app-page-head">
+                  <div><p>Ledger</p><h1>交易紀錄</h1><span>目前載入最近 {transactions.length} 筆。</span></div>
+                  <button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void loadCloudData().catch(() => setMessage("重新整理失敗，請稍後再試。"))}>
+                    <RefreshCw size={16} /> 重新整理
+                  </button>
+                </section>
+                <section className="ls-app-panel">
+                  {transactions.length > 0 ? renderTransactionRows(transactions) : (
+                    <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>還沒有交易</strong><p>新增第一筆後，交易會出現在這裡。</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記第一筆</button></div>
+                  )}
+                </section>
+              </div>
+            ) : null}
+
+            {activeTab === "settings" ? (
+              <div className="ls-app-page">
+                <section className="ls-app-page-head">
+                  <div><p>設定</p><h1>iPhone 與自動記帳</h1><span>平常不用看這頁，第一次設定完成就好。</span></div>
+                </section>
+                <section className="ls-app-settings-grid">
+                  <article className="ls-app-setting-card">
+                    <span className="ls-app-setting-icon"><CreditCard size={19} /></span>
+                    <div><strong>1. 安裝留白自動記帳</strong><p>公開捷徑不內建帳號、API Token 或私人網址。</p></div>
+                    <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Cloud.shortcut" download>安裝捷徑</a>
+                  </article>
+                  <article className="ls-app-setting-card">
+                    <span className="ls-app-setting-icon"><Link2 size={19} /></span>
+                    <div><strong>2. 連接這支 iPhone</strong><p>建立 10 分鐘、只能用一次的配對票券。</p></div>
+                    <button className="ls-button ls-primary" disabled={busy} onClick={() => void startPairing()}>連接 iPhone</button>
+                    {ticket ? <small>票券到期：{timeLabel(ticket.expires_at)}</small> : null}
+                  </article>
+                  <article className="ls-app-setting-card">
+                    <span className="ls-app-setting-icon"><WalletCards size={19} /></span>
+                    <div><strong>3. Wallet 自動化</strong><p>捷徑 App → 自動化 → 交易 → 選卡片 → 立即執行。網站/App 內付款不保證觸發。</p></div>
+                  </article>
+                </section>
+
+                <section className="ls-app-panel">
+                  <div className="ls-app-panel-head"><div><p>Devices</p><h2>已連接裝置</h2></div>{paired ? <span className="ls-success-pill"><CheckCircle2 size={15} /> 配對完成</span> : null}</div>
+                  {activeDevices.length === 0 ? <div className="ls-app-empty ls-app-empty-compact"><strong>目前沒有已啟用裝置</strong><p>手動記帳仍可正常使用。</p></div> : (
+                    <div className="ls-device-list">{activeDevices.map((device) => <div className="ls-device-row" key={device.id}><div><strong>{device.name}</strong><small>上次活動：{timeLabel(device.last_seen_at)}</small></div><button className="ls-button ls-danger-ghost" disabled={busy} onClick={() => void revoke(device.id)}><Unplug size={15} /> 解除</button></div>)}</div>
+                  )}
+                </section>
+
+                <section className="ls-app-account-card">
+                  <div><strong>帳號與安全</strong><p>Cloud Ledger 與私人 M4 Ledger 完全分開。</p></div>
+                  <button className="ls-button ls-secondary" type="button" onClick={() => void supabase?.auth.signOut()}><LogOut size={16} /> 登出</button>
+                </section>
+              </div>
+            ) : null}
+          </div>
+
+          {message ? <p className="ls-app-toast" role="status">{message}</p> : null}
+
+          <nav className="ls-app-bottom-nav" aria-label="手機帳本導覽">
+            {navItems.map(({ id, label, icon: Icon }) => (
+              <button key={id} type="button" data-active={activeTab === id} onClick={() => setActiveTab(id)}>
+                <Icon size={19} /><span>{label}</span>
+              </button>
+            ))}
+          </nav>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="ledger-site">
+      {googleSigningIn ? (
+        <div className="ls-google-transition" role="status" aria-live="polite">
+          <div className="ls-google-transition-card"><span className="ls-google-spinner" /><strong>正在登入 Ledger…</strong><small>Google 已完成驗證，正在載入你的帳本。</small></div>
+        </div>
+      ) : null}
       <section className="ls-connect-shell ls-wrap">
         <header className="ls-connect-header">
           <a className="ls-brand" href="/" aria-label="留白 Ledger 首頁">
