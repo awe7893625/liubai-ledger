@@ -158,11 +158,10 @@ def metadata(name, actions, input_classes):
     }
 
 
-def build():
-    a = [action("comment", "help", WFCommentActionText=(
-        "留白自動記帳 v2｜app.blankspaces.uk\n先從網站設定連接 iPhone。Wallet 自動化傳入辭典 amount / merchant / card。"
-        "所有銀行共用此捷徑；卡片對應在各自的網站帳號設定。只在後端回覆交易編號與收據後通知。")),
-        action("gettext", "input-text", WFTextActionText=incoming()),
+def pair_actions():
+    # Both shortcuts accept the same one-time website ticket. A new user can now
+    # install/pair Manual first and install Automatic only after the manual receipt.
+    a = [action("gettext", "input-text", WFTextActionText=incoming()),
         cond("if-pair", "pair-mode", 0, output("input-text"), condition=8, equals="pair:"),
         action("url", "pair-url", WFURLActionURL=PAIR_URL),
         action("downloadurl", "pair-response", WFURL=output("pair-url"), WFHTTPMethod="POST", WFHTTPBodyType="JSON",
@@ -172,7 +171,15 @@ def build():
     ]
     a += require_value("pair-error", output("new-device-token"), "配對未成功，請回網站重新產生票券。舊裝置憑證不會覆蓋。")
     a += write_file("pair-token", output("new-device-token"), "device-token.txt")
-    a += [notice("pair-ok", "iPhone 已連接。手動記帳沿用這份憑證，先用測試連線驗證。"), stop("pair-done"), cond("pair-end", "pair-mode", 2)]
+    a += [notice("pair-ok", "iPhone 已連接。接著開啟「留白手動記帳」選記支出，成功記一筆後回網站設定 Apple Pay。測試連線不等於入帳成功。"), stop("pair-done"), cond("pair-end", "pair-mode", 2)]
+    return a
+
+
+def build():
+    a = [action("comment", "help", WFCommentActionText=(
+        "留白自動記帳 v3｜app.blankspaces.uk\n先用留白手動記帳配對並成功記一筆，再設定 Wallet 自動化。傳入辭典 amount / merchant / card。"
+        "所有銀行共用；卡片對應在自己的帳號設定。只有後端確認入帳才通知；網站無法代替 iPhone 建立交易自動化。"))]
+    a += pair_actions()
     a += require_value("wallet-empty", incoming(), "這支捷徑由 Wallet 交易自動化執行。手動記帳請改開「留白手動記帳」。")
     a += load_device()
     for key in ("amount", "merchant", "card"):
@@ -198,10 +205,11 @@ def choose_config(name, key, prompt):
 
 def build_manual():
     a = [action("comment", "manual-help", WFCommentActionText=(
-        "留白手動記帳 v2｜app.blankspaces.uk\n先在網站建立自己的付款方式，安裝自動記帳並配對一次。兩支捷徑共用憑證。"
+        "留白手動記帳 v3｜app.blankspaces.uk\n先安裝這支捷徑，在網站按連接 iPhone。成功手動記一筆後，網站帶你完成 Apple Pay 自動記帳設定。兩支捷徑共用憑證。"
         "不需改 API、JSON 或卡名；每次讀取自己的付款選項。\n"
         "送出前保存一筆草稿；網路失敗時重開可重送相同請求，不會建立第二筆。"
-        "設定清單載入仍需網路；本捷徑不是完整離線帳本。"))]
+        "設定清單載入仍需網路；本捷徑不是完整離線帳本。測試連線只檢查網路，不會解鎖入帳驗證。"))]
+    a += pair_actions()
     a += load_device()
     a += choose_config("mode", "directions", "留白記帳")
     a += [cond("probe-check", "probe", 0, output("mode-value"), condition=4, equals="probe"),
@@ -241,7 +249,7 @@ def build_manual():
           action("gettext", "manual-json", WFTextActionText=token("manual-body"))]
     a += write_file("manual-draft", output("manual-json"), "pending-manual.json")
     a += submit("manual-post", output("manual-body"), clear_manual=True)
-    return metadata("留白手動記帳", a, [])
+    return metadata("留白手動記帳", a, ["WFStringContentItem"])
 
 
 def validate(data):

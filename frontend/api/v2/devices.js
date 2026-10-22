@@ -6,6 +6,7 @@ import {
   requireUser,
   send,
 } from "../_shared/cloud.js";
+import { shortcutReadiness } from "../_shared/shortcut-onboarding.js";
 
 export default async function handler(req, res) {
   try {
@@ -19,7 +20,10 @@ export default async function handler(req, res) {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return send(res, 200, { ok: true, devices: data || [] });
+      const devices = data || [];
+      const onboarding = String(req.query?.onboarding || "") === "1"
+        ? await shortcutReadiness(db, user.id, devices) : undefined;
+      return send(res, 200, { ok: true, devices, ...(onboarding ? { onboarding } : {}) });
     }
 
     if (req.method !== "POST" && req.method !== "PATCH") {
