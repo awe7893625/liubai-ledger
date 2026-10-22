@@ -29,6 +29,7 @@ import { ShortcutOnboarding } from "./ShortcutOnboarding";
 import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadAllLedgerPages, retryRequest } from "./ledger-data";
 import "./launch.css";
 import "./mobile-polish.css";
+import "./edit-transaction.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
@@ -279,6 +280,12 @@ export function CloudConnect() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
+  const [editing, setEditing] = useState<CloudTransaction | null>(null);
+  const [editMerchant, setEditMerchant] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editAccount, setEditAccount] = useState("");
+  const [editCategory, setEditCategory] = useState("");
   const [merchant, setMerchant] = useState("");
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -548,6 +555,31 @@ export function CloudConnect() {
     }
   };
 
+  const beginEdit = (tx: CloudTransaction) => {
+    setEditing(tx); setEditMerchant(tx.merchant || "");
+    setEditAmount(tx.amount_minor === null ? "" : (Math.abs(tx.amount_minor) / 100).toFixed(2));
+    setEditNote(tx.note || ""); setEditAccount(tx.account_id || ""); setEditCategory(tx.category_id || "");
+  };
+
+  const saveEdit = async () => {
+    if (!session || !editing || busy) return;
+    if (!editMerchant.trim() || !/^\\d+(?:\\.\\d{1,2})?$/.test(editAmount) || Number(editAmount) <= 0) {
+      setMessage("請輸入有效的商家與金額。"); return;
+    }
+    setBusy(true); setMessage("");
+    try {
+      const result = await cloudRequest<{ok:boolean;transaction?:{id:string}}>("/api/v2/transactions", session, {
+        method:"PATCH", body:JSON.stringify({id:editing.id, merchant:editMerchant.trim(), amount:editAmount,
+          direction:(editing.amount_minor ?? 0) >= 0 ? "income":"expense", note:editNote,
+          account_id:editAccount || null, category_id:editCategory || null}),
+      });
+      if (!result.ok || result.transaction?.id !== editing.id) throw new Error("更新未確認");
+      setEditing(null); setMessage("✅ 交易已更新。");
+      await loadCloudData().catch(() => setMessage("已更新，請重新整理交易列表。"));
+    } catch (error) { setMessage(error instanceof Error ? `更新失敗：${error.message}` : "更新失敗"); }
+    finally { setBusy(false); }
+  };
+
   const deleteTransaction = async (id: string) => {
     if (!session) return;
     const transaction = transactions.find((row) => row.id === id);
@@ -656,6 +688,7 @@ export function CloudConnect() {
                 <strong>{moneyLabel(tx)}</strong>
                 <span data-status={tx.source === "apple_pay" && !tx.account_id ? "pending" : tx.status}>{tx.source === "apple_pay" && !tx.account_id ? "卡片待對應" : statusLabel(tx.status)}</span>
               </div>
+              <button type="button" className="ls-app-transaction-edit" aria-label={`編輯 ${tx.merchant || "交易"}`} disabled={busy} onClick={() => beginEdit(tx)}>編輯</button>
               <button
                 type="button"
                 className="ls-app-transaction-delete"
@@ -699,6 +732,7 @@ export function CloudConnect() {
           </header>
 
           <div className="ls-app-main">
+            {editing ? <div className="ls-edit-overlay" role="presentation"><section className="ls-edit-sheet" role="dialog" aria-modal="true" aria-label="編輯交易"><h2>編輯交易</h2><p>修改商家、金額、分類及帳戶；原始記帳來源不變。</p><label>商家<input aria-label="編輯商家" value={editMerchant} onChange={(e)=>setEditMerchant(e.target.value)} /></label><label>金額<input aria-label="編輯金額" inputMode="decimal" value={editAmount} onChange={(e)=>setEditAmount(e.target.value)} /></label><label>分類<select aria-label="編輯分類" value={editCategory} onChange={(e)=>setEditCategory(e.target.value)}><option value="">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>帳戶<select aria-label="編輯帳戶" value={editAccount} onChange={(e)=>setEditAccount(e.target.value)}><option value="">未指定</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>備註<textarea aria-label="編輯備註" value={editNote} onChange={(e)=>setEditNote(e.target.value)} /></label><div className="ls-edit-actions"><button type="button" className="ls-button ls-secondary" disabled={busy} onClick={()=>setEditing(null)}>取消</button><button type="button" className="ls-button ls-primary" disabled={busy} onClick={()=>void saveEdit()}>{busy?"儲存中…":"儲存變更"}</button></div></section></div> : null}
             {dataError ? <div className="ls-load-error" role="alert"><div><strong>帳本尚未完整更新</strong><p>{dataError}{loadedAt ? " 下方保留上次成功載入的資料。" : " 這不代表帳本沒有交易。"}</p></div><button type="button" className="ls-button ls-secondary" disabled={dataLoading} onClick={() => void loadCloudData().catch(() => {})}>重試載入</button></div> : null}
             {dataLoading ? <p className="ls-load-state" role="status">正在同步帳本…</p> : null}
             {issuedRecoveryCode ? (
