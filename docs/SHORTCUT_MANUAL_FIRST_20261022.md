@@ -61,6 +61,20 @@ Private evidence lives under `.qa/shortcut-onboarding-20261022/`, ignored by Git
 `api-tests.log`, `ui-tests.log`, `release-check.log`, `local/report.json` (429),
 `isolated-ui/report.json`, and synthetic screenshot files.
 
+## Published release
+
+- Source revision: `0fde4ea` (including its preceding tested checkpoint).
+- Production deployment: `dpl_B7bQWTQHNuEHffxRPLFM89P9si4P`, READY, aliased to
+  `https://app.blankspaces.uk`.
+- Public `/connect`, settings entry and health returned HTTP 200. Unauthenticated
+  onboarding requests returned 401.
+- Published manual file: 34,891 bytes,
+  SHA-256 `55ee926698b5213efd9b23af2d81608e898b93843ef966f6b7d07526b50d6d03`.
+- Published automatic file: 29,030 bytes,
+  SHA-256 `72cc52c3d44a1a634b888482ee217857a8a5324ed507e30c3e6ad2eb26f184e8`.
+- These public smoke checks are not a replacement for the rate-limited live
+  authenticated E2E attempt or physical iPhone acceptance.
+
 ## Native instructions checked against Apple
 
 - https://support.apple.com/zh-tw/guide/shortcuts/apd65c67538a/ios
