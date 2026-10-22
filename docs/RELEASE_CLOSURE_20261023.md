@@ -94,3 +94,28 @@ bash scripts/release_public_beta.sh --check
 
 The pending combined branch must retain its separate schema guard when merging
 this batch. The public release branch contains no dependency on pending tables.
+
+## Accepted public release receipt
+
+- Application source: `2eb195af2b6b` including its tested checkpoint commits.
+- Production deployment: `dpl_H9FnVmGni2csDThxtCJGp9z5KbvU`, READY.
+- The application-only release script passed checks for public pages, health,
+  exact published source revision, no-store build metadata, and byte-identical
+  signed manual/Wallet Shortcut downloads.
+- Independent real-browser public login checks passed at 390px and 1280px;
+  Google button rendered with no JavaScript errors or horizontal overflow.
+  These checks performed no signups, logins or protected-data writes.
+- A subsequent default urllib request to `/version.json` received HTTP 403.
+  It was not retried with changed headers, another origin or credentials.
+  The preceding successful release-script evidence is retained separately.
+- Authenticated production acceptance remains incomplete: its single ordinary
+  signup attempt received HTTP 429. Fixture passes are not substituted for it.
+- The combined planning/preferences candidate was merged without removing its
+  schema guard; check-only release and 15 isolated planning/settings scenarios
+  passed. That candidate was not deployed and no blocked hosted DDL or M4 sync
+  operation was performed.
+
+Evidence: `.qa/completion-20261023/deployment.log`, `public-receipt.json`,
+`browser/report.json`, `production/report.json`; existing regression evidence
+under `.qa/product-finish-20261023/browser/`.
+
