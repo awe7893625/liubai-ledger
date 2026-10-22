@@ -64,6 +64,16 @@ export function AccountSettings({ session, client, onSignOut, preferences, accou
     } catch (error) { if (mounted.current) setNotice(error instanceof Error ? error.message : "密碼更新失敗"); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   };
+  const signOutOthers = async () => {
+    if (busy || !window.confirm("取消其他瀏覽器登入的續期？目前這台保留登入，已配對的 iPhone 捷徑不受影響。")) return;
+    setBusy(true); setNotice("");
+    try {
+      const { error } = await client.auth.signOut({ scope: "others" });
+      if (error) throw error;
+      setNotice("其他登入的續期已取消；已發出的存取權杖到期前仍可能有效。捷徑裝置需在 iPhone 設定另行解除。");
+    } catch { setNotice("未完成登出其他瀏覽器，請稍後再試。"); }
+    finally { setBusy(false); }
+  };
   return <section className="ls-general-settings" aria-label="一般設定">
     <div className="ls-general-heading"><p>ACCOUNT & PREFERENCES</p><h2>帳號與一般設定</h2><span>偏好跟著帳號，不只留在這台手機。</span></div>
     <form className="ls-general-card" onSubmit={(event) => { event.preventDefault(); void request("PUT"); }}>
@@ -83,7 +93,7 @@ export function AccountSettings({ session, client, onSignOut, preferences, accou
     </form>
     <div className="ls-general-card"><h3>登入與安全</h3>
       {passwordAccount ? <><p>更新密碼前會重新驗證原密碼。</p><div className="ls-general-grid"><label>目前密碼<input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label><label>新密碼<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>再次輸入新密碼<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label></div><button className="ls-button ls-secondary" disabled={busy || !currentPassword || !newPassword} onClick={() => void changePassword()}>更新密碼</button><p>忘記密碼可在登入頁使用先前保存的復原碼。</p></> : <><p>Google 密碼和復原方式請到 Google 帳號管理；Ledger 不保存你的 Google 密碼。</p><a className="ls-general-link" href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Google 帳號安全中心</a></>}
-      <button className="ls-button ls-secondary" type="button" onClick={onSignOut}>登出這台裝置</button>
+      <button className="ls-button ls-secondary" type="button" onClick={onSignOut}>登出這台裝置</button><button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void signOutOthers()}>登出其他瀏覽器</button>
     </div>
     <div className="ls-general-card"><h3>資料與隱私</h3><p>交易頁可下載 CSV。需刪除帳號時，提出申請後會先驗證所有權。</p><div className="ls-general-links"><a href="/privacy">隱私權政策</a><a href="/terms">服務條款</a><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Account%20Deletion">申請刪除帳號</a></div></div>
     {notice ? <p className="ls-general-notice" role="status">{notice}</p> : null}

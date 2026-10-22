@@ -32,6 +32,10 @@
       "dest": "/api/v2/bootstrap?resource=budgets"
     },
     {
+      "src": "/api/v2/categories",
+      "dest": "/api/v2/bootstrap?resource=categories"
+    },
+    {
       "handle": "filesystem"
     },
     {

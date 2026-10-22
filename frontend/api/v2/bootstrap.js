@@ -8,6 +8,7 @@ import {
 import budgetHandler from "../_shared/budget-handler.js";
 import preferencesHandler, { readPreferences } from "../_shared/preferences-handler.js";
 import planningHandler from "../_shared/planning-handler.js";
+import categoryHandler from "../_shared/category-handler.js";
 
 const DEFAULT_CATEGORIES = [
   ["餐飲", "food"],
@@ -24,6 +25,7 @@ export default async function handler(req, res) {
   if (req.query?.resource === "budgets") return budgetHandler(req, res);
   if (req.query?.resource === "preferences") return preferencesHandler(req, res);
   if (req.query?.resource === "planning") return planningHandler(req, res);
+  if (req.query?.resource === "categories") return categoryHandler(req, res);
   if (req.query?.resource) return send(res, 400, { ok: false, error: "Unknown resource" });
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
