@@ -112,7 +112,8 @@ def load_device():
                 cond("config-check", "config-gate", 0, output("config-result"), condition=5, equals="connected"),
                 notice("config-error", "無法確認裝置連線。請重新配對，尚未送出任何交易。"),
                 stop("config-stop"), cond("config-end", "config-gate", 2),
-                get("request-id", "request_id", output("config"))]
+                get("request-id", "request_id", output("config")),
+                get("ledger-label", "ledger_label", output("config"))]
     return actions
 
 
@@ -230,7 +231,7 @@ def build_manual():
           action("date", "manual-date", WFDateActionMode="Current Date"),
           action("format.date", "manual-time", WFDate=token("manual-date"), WFDateFormatStyle="ISO 8601"),
           action("alert", "manual-confirm", WFAlertActionTitle="確認這筆記帳", WFAlertActionCancelButtonShown=True,
-                 WFAlertActionMessage=mixed(("mode-choice",), " NT$", ("manual-amount",), "\n", ("manual-merchant",), "\n", ("account-choice",), " · ", ("category-choice",))),
+                 WFAlertActionMessage=mixed("帳本：", ("ledger-label",), "\n", ("mode-choice",), " NT$", ("manual-amount",), "\n", ("manual-merchant",), "\n", ("account-choice",), " · ", ("category-choice",))),
           action("dictionary", "manual-body", WFItems=dictionary([
               ("amount", token("manual-amount")), ("merchant", token("manual-merchant")), ("card", token("account-choice")),
               ("account_id", token("account-value")), ("category_id", token("category-value")),

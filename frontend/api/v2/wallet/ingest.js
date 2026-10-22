@@ -154,6 +154,7 @@ export default async function handler(req, res) {
       return send(res, 200, {
         ok: true, version: 2, result: "connected", message: "連線成功，尚未建立任何交易",
         request_id: `shortcut_${randomToken(18)}`,
+        ledger_label: config.ledger_label,
         directions: { "記支出": "expense", "記收入": "income", "測試連線（不記帳）": "probe" },
         pending_actions: { "重送上次未確認記帳": "retry", "捨棄草稿並重新輸入": "discard", "取消並保留草稿": "cancel" },
         accounts: Object.fromEntries(config.accounts.filter((a) => a.currency === "TWD").map((a) => [a.name, a.id])),
@@ -268,10 +269,12 @@ export default async function handler(req, res) {
     const duplicate = !eventCreated || !transactionCreated;
     const unmapped = Boolean(acceptedCard && !payload.account_id);
     const needsReview = transaction.status !== "confirmed" || unmapped;
-    const message = duplicate ? "這筆已存在，沒有重複記帳"
+    const headline = duplicate ? "這筆已存在，沒有重複記帳"
       : transaction.status !== "confirmed" ? "已保存，金額或商家缺漏，請到帳本確認"
       : unmapped ? "已記帳；卡片尚未對應，請到設定加入 Wallet 別名"
       : "記帳成功";
+    const amountLabel = ledgerAmount === null ? "待補金額" : `${ledgerAmount < 0 ? "支出" : "收入"} ${acceptedCurrency} ${(Math.abs(ledgerAmount) / 100).toLocaleString("zh-TW", { maximumFractionDigits: 2 })}`;
+    const message = `${headline}\n${acceptedMerchant || "待補商家"} · ${amountLabel}\n帳本：${config.ledger_label}`;
     return send(res, duplicate ? 200 : 201, {
       ok: true,
       duplicate,

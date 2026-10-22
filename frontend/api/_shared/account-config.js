@@ -48,13 +48,15 @@ export function matchAccount(rawCard, accounts) {
 }
 
 export async function ownedConfig(db, userId) {
-  const [accounts, categories] = await Promise.all([
+  const [accounts, categories, profile] = await Promise.all([
     db.from("ledger_accounts").select(ACCOUNT_FIELDS).eq("user_id", userId).order("created_at", { ascending: true }),
     db.from("ledger_categories").select("id,name,slug").eq("user_id", userId).order("name", { ascending: true }),
+    db.from("ledger_profiles").select("username_display").eq("user_id", userId).maybeSingle(),
   ]);
   if (accounts.error) throw accounts.error;
   if (categories.error) throw categories.error;
-  return { accounts: accounts.data || [], categories: categories.data || [] };
+  if (profile.error) throw profile.error;
+  return { accounts: accounts.data || [], categories: categories.data || [], ledger_label: profile.data?.username_display || "我的帳本" };
 }
 
 export async function requireDevice(req, db) {

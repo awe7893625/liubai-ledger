@@ -592,7 +592,7 @@ export function CloudConnect() {
               </div>
               <div className="ls-app-transaction-amount">
                 <strong>{moneyLabel(tx)}</strong>
-                <span data-status={tx.status}>{statusLabel(tx.status)}</span>
+                <span data-status={tx.source === "apple_pay" && !tx.account_id ? "pending" : tx.status}>{tx.source === "apple_pay" && !tx.account_id ? "卡片待對應" : statusLabel(tx.status)}</span>
               </div>
               <button
                 type="button"
@@ -754,7 +754,7 @@ export function CloudConnect() {
                 <section className="ls-app-settings-grid">
                   <article className="ls-app-setting-card">
                     <span className="ls-app-setting-icon"><CreditCard size={19} /></span>
-                    <div><strong>1. 安裝自動記帳捷徑</strong><p>新版 v2：所有卡片共用、確認入帳才通知，不需填網址或 Token。</p></div>
+                    <div><strong>1. 安裝自動記帳捷徑</strong><p>新版 v2：所有卡片共用、確認入帳才通知，不需填網址或 Token。舊版請選取代，保留名稱「留白自動記帳」。</p></div>
                     <a className="ls-button ls-secondary" href="/shortcuts/Liubai-Cloud.shortcut" download>安裝自動記帳</a>
                   </article>
                   <article className="ls-app-setting-card">
@@ -1141,7 +1141,7 @@ export function CloudConnect() {
 
         {message ? <p className="ls-connect-message" role="status">{message}</p> : null}
         <p className="ls-connect-footnote">
-          這是免費 Beta。Cloud Ledger 與你自己的 M4 私人 Ledger 使用不同資料庫與憑證；不會把既有私人帳本自動搬上雲端。
+          你的帳本只屬於自己的帳號。登入後即可手動記帳，iPhone 捷徑可稍後設定。
         </p>
       </section>
     </main>

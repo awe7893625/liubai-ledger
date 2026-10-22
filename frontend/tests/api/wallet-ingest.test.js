@@ -20,6 +20,7 @@ function createState() {
       token_hash: sha256Hex(DEVICE_TOKEN),
       revoked_at: null,
     }],
+    profiles: [{ user_id: USER_ID, username_display: "QA Owner" }],
     accounts: [
       { id: "card-1", user_id: USER_ID, name: "日常 Visa", currency: "TWD", type: "card", card_aliases: ["Visa 1234"] },
       { id: "other-card", user_id: "user-2", name: "別人的卡", currency: "TWD", type: "card", card_aliases: ["Visa 1234"] },
@@ -40,6 +41,7 @@ function rowsFor(state, table) {
   if (table === "ledger_transactions") return state.transactions;
   if (table === "ledger_accounts") return state.accounts;
   if (table === "ledger_categories") return state.categories;
+  if (table === "ledger_profiles") return state.profiles;
   throw new Error(`Unexpected table ${table}`);
 }
 
