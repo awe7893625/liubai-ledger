@@ -1,0 +1,112 @@
+/* Shared app rhythm. Navigation reserves its own space; it never covers a form. */
+.ls-app-root { -webkit-text-size-adjust: 100%; }
+.ls-app-root :is(button,input,select,textarea) { font-family: inherit; }
+.ls-app-root :is(input,select,textarea) { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.ls-app-root :is(select,input[type="datetime-local"]) { min-height: 44px; width: 100%; padding: 10px 12px; border: 1px solid var(--ls-strong); border-radius: 12px; background-color: var(--ls-soft); color: var(--ls-text); font-size: 16px; line-height: 1.4; }
+.ls-app-root input[type="datetime-local"] { display: block; min-inline-size: 0; inline-size: 100%; }
+.ls-app-root input[type="datetime-local"]::-webkit-date-and-time-value { text-align: start; min-height: 1.4em; }
+.ls-app-root label { min-width: 0; }
+.ls-app-root .ls-direction-switch[aria-label="設定分類"] { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.lf-helper { font-size: 12px; color: var(--ls-faint); line-height: 1.65; }
+.lf-freshness { border-left: 2px solid var(--ls-strong); padding: 5px 10px; color: var(--ls-faint); font-size: 12px; line-height: 1.65; }
+.lf-freshness summary { cursor: pointer; font-variant-numeric: tabular-nums; }
+.lf-freshness p { margin: 9px 0; }
+.lf-freshness .ls-button { min-height: 40px; font-size: 12px; }
+.lf-more-filters { border: 1px solid var(--ls-line); border-radius: 14px; padding: 12px 14px; background: var(--ls-paper); }
+.lf-more-filters > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.lf-more-filters[open] > .ls-transaction-toolbar { margin-top: 12px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.lf-more-filters .ls-transaction-toolbar label:first-child { min-width: 0; }
+.lf-more-filters > .ls-button { margin-top: 12px; min-height: 40px; font-size: 12px; }
+.lf-day-groups { display: grid; gap: 20px; }
+.lf-day-groups > section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.lf-day-groups h2 { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lf-day-groups header > span { font-size: 11px; color: var(--ls-faint); }
+.lf-day-totals { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 8px; font-size: 11px; color: var(--ls-faint); }
+.lf-settings-card,.lf-history { display: grid; gap: 16px; min-width: 0; border: 1px solid var(--ls-line); border-radius: 18px; padding: 18px; background: var(--ls-paper); }
+.lf-settings-card > header,.lf-history > header { display:flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.lf-settings-card h2,.lf-history h2 { font-size: 16px; margin: 0; }
+.lf-settings-card p,.lf-history p { font-size: 12px; color: var(--ls-faint); }
+.lf-settings-card header small { white-space: nowrap; font-size: 11px; color: var(--ls-faint); }
+.lf-settings-card form,.lf-settings-card label { display: grid; gap: 8px; }
+.lf-settings-card label { font-size: 12px; font-weight: 600; }
+.lf-settings-card input { font-size: 16px; background: var(--ls-soft); color: var(--ls-text); border: 1px solid var(--ls-strong); border-radius: 12px; min-height: 44px; padding: 10px 12px; width: 100%; }
+.lf-inline-actions { display:flex;flex-wrap:wrap;gap:8px; }
+.lf-category-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+.lf-category-list button { display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;min-width:0;border:1px solid var(--ls-line);border-radius:11px;background:var(--ls-soft);color:var(--ls-text);padding:10px 12px;font-size:13px; }
+.lf-category-list button span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.lf-category-list button small { color:var(--ls-accent-ink);font-size:11px;white-space:nowrap; }
+.lf-history-chart { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px; }
+.lf-history-chart button { min-width:0;display:grid;gap:5px;place-items:center;border:0;background:transparent;color:var(--ls-text);padding:6px 0;cursor:pointer; }
+.lf-history-columns { display:flex;align-items:flex-end;justify-content:center;gap:4px;width:100%;height:110px;border-bottom:1px solid var(--ls-line); }
+.lf-history-columns i { display:block;width:22%;max-width:22px;border-radius:5px 5px 0 0;min-height:1px; }
+.lf-history [data-series="expense"] { background:var(--ls-accent-ink); }
+.lf-history [data-series="income"] { background:var(--ls-green); }
+.lf-history-chart b { font-size:12px;font-weight:600; }
+.lf-history-chart small { font-size:10px;color:var(--ls-faint); }
+.lf-history-legend { display:flex;gap:14px;font-size:11px;color:var(--ls-faint); }
+.lf-history-legend span { background:transparent !important;display:flex;align-items:center;gap:5px; }
+.lf-history-legend span::before { content:"";width:8px;height:8px;border-radius:2px;background:var(--ls-accent-ink); }
+.lf-history-legend span[data-series="income"]::before { background:var(--ls-green); }
+.lf-history summary { font-size:12px;cursor:pointer; }
+.lf-history-table { width:100%;overflow:auto; }
+.lf-history table { border-collapse:collapse;font-size:12px;width:100%; }
+.lf-history td,.lf-history th { padding:8px;text-align:right;border-bottom:1px solid var(--ls-line);white-space:nowrap; }
+.lf-history th:first-child { text-align:left; }
+.ls-app-root .ls-app-transaction-delete { width:44px;height:44px; }
+.ls-app-root .ls-app-transaction-row { grid-template-columns:34px minmax(0,1fr) minmax(80px,auto) 44px; }
+.ls-app-root .ls-app-transaction-copy strong { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.ls-app-root .ls-app-amount-field > div { min-height:74px; }
+@media(max-width:760px) {
+  html.ledger-shell-active,html.ledger-shell-active body,html.ledger-shell-active #root { height:100%;overflow:hidden; }
+  .ls-app-root { height:var(--ledger-viewport,100dvh);min-height:0;overflow:hidden; }
+  .ls-app-root .ls-app-shell { width:100%;max-width:none;height:100%;min-height:0;padding:0;margin:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto; }
+  .ls-app-root .ls-app-topbar { grid-row:1;position:relative;top:auto;margin:0;min-height:56px;padding:8px 14px;border-radius:0;z-index:30; }
+  .ls-app-root .ls-app-main { grid-row:2;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px 14px 24px;scroll-padding-block:12px 28px; }
+  .ls-app-root .ls-app-page { padding-bottom:0;gap:14px; }
+  .ls-app-root .ls-app-bottom-nav { grid-row:4;position:static;left:auto;bottom:auto;transform:none;width:100%;min-height:64px;border-radius:0;border-width:1px 0 0;margin:0;box-shadow:0 -3px 18px rgb(30 25 20 / 4%);background:var(--ls-paper);backdrop-filter:none;padding:5px 8px max(6px,env(safe-area-inset-bottom));grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .ls-app-root .ls-app-bottom-nav button { min-height:48px;min-width:0;border-radius:12px;font-size:10px; }
+  .ls-app-root .ls-app-toast { grid-row:3;position:static;max-width:none;width:auto;margin:0;padding:10px 14px;max-height:76px;overflow:auto;border-radius:0;box-shadow:none;font-size:12px; }
+  .ledger-keyboard-open .ls-app-root .ls-app-bottom-nav { display:none; }
+  .ls-app-root .ls-app-page-head { padding:0 0 2px; }
+  .ls-app-root .ls-app-page-head h1 { font-size:23px; }
+  .ls-app-root .ls-app-primary-action { min-height:44px;padding:8px 12px; }
+  .ls-app-root .ls-app-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+  .ls-app-root .ls-app-stat,.ls-app-root .ls-app-stat:first-child { min-height:106px;grid-row:auto;padding:14px;border-radius:16px; }
+  .ls-app-root .ls-app-stat:first-child strong,.ls-app-root .ls-app-stat strong { font-size:clamp(19px,5.5vw,26px); }
+  .ls-app-root .ls-app-stat:nth-child(3) { grid-column:1/-1;min-height:68px;display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:center; }
+  .ls-app-root .ls-app-stat:nth-child(3) strong { grid-column:2;grid-row:1/3;font-size:17px; }
+  .ls-app-root .ls-app-stat:nth-child(3) small { grid-column:1; }
+  .ls-app-root .ls-shortcut-banner { padding:14px;gap:10px;grid-template-columns:32px minmax(0,1fr); }
+  .ls-app-root .ls-shortcut-banner-icon { width:32px;height:32px; }
+  .ls-app-root .ls-shortcut-banner h2 { font-size:14px; }
+  .ls-app-root .ls-shortcut-banner .ls-button { min-height:40px;padding:7px 11px;font-size:12px;grid-column:2;justify-self:start; }
+  .ls-app-root .ls-app-transaction-row { grid-template-columns:26px minmax(0,1fr) minmax(70px,auto) 36px;gap:5px; }
+  .ls-app-root .ls-app-transaction-icon { width:26px;height:30px; }
+  .ls-app-root .ls-app-transaction-copy strong { font-size:12px; }
+  .ls-app-root .ls-app-transaction-copy small { font-size:10px; }
+  .ls-app-root .ls-app-transaction-amount strong { font-size:12px; }
+  .ls-app-root .ls-app-transaction-delete { width:36px;min-height:44px; }
+  .ls-app-root .ls-app-field input,.ls-app-root .ls-app-field select,.ls-app-root .ls-app-field textarea { width:100%;min-height:46px;font-size:16px; }
+  .ls-app-root .ls-app-amount-field input { font-size:36px;height:62px;padding:0; }
+  .ls-app-root .ls-app-amount-field { padding:0 0 16px;margin-bottom:14px; }
+  .ls-app-root .ls-app-save { margin-top:18px;min-height:48px; }
+  .ls-app-root .ls-direction-switch[aria-label="設定分類"] button { font-size:12px;min-height:44px; }
+  .lf-more-filters[open] > .ls-transaction-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .lf-more-filters select { font-size:14px; }
+  .lf-settings-card,.lf-history { padding:15px; }
+}
+/* The appearance switch is explicitly device-local until the cloud preference
+   migration is authorized. Every active app surface follows these tokens. */
+.ls-app-root :is(.ls-general-card,.ls-insights,.ls-edit-sheet) { background:var(--ls-paper);border-color:var(--ls-line);color:var(--ls-text); }
+.ls-app-root :is(.ls-general-card input,.ls-general-card select,.ls-general-card textarea) { background:var(--ls-soft);color:var(--ls-text);border-color:var(--ls-strong); }
+.ls-app-root :is(.ls-general-heading span,.ls-general-card small,.ls-general-card p,.ls-general-card label,.ls-insights-empty,.ls-insights-top span) { color:var(--ls-faint); }
+.ls-app-root :is(.ls-general-notice) { background:var(--ls-paper);border-color:var(--ls-line);color:var(--ls-text); }
+.ls-app-root .ls-insights-bottom p { color:var(--ls-faint); }
+.ls-app-root .ls-insights-bottom p b { color:var(--ls-text); }
+.ls-app-root[data-theme="dark"] :is(.ls-secondary,.ls-general-card .ls-button,.ls-app-signout) { background:var(--ls-elevated);color:var(--ls-text);border-color:var(--ls-strong);transition:none; }
+.ls-app-root[data-theme="dark"] .ls-primary { background:var(--ls-accent-ink);color:var(--ls-bg); }
+.ls-app-root[data-theme="dark"] .ls-app-stat-primary { background:var(--ls-paper);color:var(--ls-text);border-color:var(--ls-strong); }
+.ls-app-root[data-theme="dark"] .ls-app-stat-primary :is(span,small) { color:var(--ls-faint); }
+.ls-app-root[data-theme="dark"] :is(.ls-direction-switch,.ls-general-avatar,.ls-insights-bar-track) { background:var(--ls-soft); }
+.ls-app-root[data-theme="dark"] :is(.ls-general-link,.ls-general-links a) { color:var(--ls-accent-ink); }
+@media(prefers-reduced-motion:reduce){.ls-app-root *{scroll-behavior:auto!important;transition:none!important;}}

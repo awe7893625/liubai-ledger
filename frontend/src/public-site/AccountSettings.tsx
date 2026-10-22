@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import "./account-settings.css";
+import { readDeviceAppearance } from "./device-appearance";
+import type { DeviceAppearance } from "./device-appearance";
 
-type Props = { session: Session; client: SupabaseClient; onSignOut: () => void };
+type Props = { session: Session; client: SupabaseClient; onSignOut: () => void; onDisplayChange?: (value: DeviceAppearance) => void };
 
-export function AccountSettings({ session, client, onSignOut }: Props) {
+export function AccountSettings({ session, client, onSignOut, onDisplayChange }: Props) {
   const uid = session.user.id;
   const passwordAccount = session.user.email?.endsWith("@users.liubai.invalid") && session.user.user_metadata?.provider !== "google";
   const base = session.user.user_metadata?.display_name || session.user.user_metadata?.username || "使用者";
@@ -18,7 +20,7 @@ export function AccountSettings({ session, client, onSignOut }: Props) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const saveLocal = (key: string, value: string) => {
-    try { localStorage.setItem(`ledger-settings:${uid}:${key}`, value); setNotice("已儲存到這台裝置。"); }
+    try { localStorage.setItem(`ledger-settings:${uid}:${key}`, value); onDisplayChange?.(readDeviceAppearance(uid)); setNotice("已儲存並套用到這台裝置；尚未跨裝置同步。"); }
     catch { setNotice("這個瀏覽器不允許儲存偏好。"); }
   };
   const changePassword = async () => {
@@ -34,11 +36,25 @@ export function AccountSettings({ session, client, onSignOut }: Props) {
       const response = await fetch("/api/v2/auth/login", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password: currentPassword }) });
       if (!response.ok) throw new Error("目前密碼不正確，或嘗試次數過多。");
+      const reauthenticated = await response.json();
+      if (!reauthenticated.session?.access_token) throw new Error("未完成重新驗證。");
+      const verified = await client.auth.getUser(reauthenticated.session.access_token);
+      if (verified.error || verified.data.user?.id !== uid) throw new Error("重新驗證的帳號不同，請登出後重新登入。");
       const { error } = await client.auth.updateUser({ password: newPassword });
       if (error) throw new Error(error.message);
       setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-      setNotice("密碼已更新。若其他裝置仍登入，請在帳號安全頁登出所有裝置。");
+      setNotice("密碼已更新。可使用下方「登出其他瀏覽器」取消其他登入的續期。");
     } catch (error) { setNotice(error instanceof Error ? error.message : "密碼更新失敗。"); }
+    finally { setBusy(false); }
+  };
+  const signOutOthers = async () => {
+    if (busy || !window.confirm("取消其他瀏覽器登入的續期？目前這台保留登入，已配對的 iPhone 捷徑不受影響。")) return;
+    setBusy(true); setNotice("");
+    try {
+      const { error } = await client.auth.signOut({ scope: "others" });
+      if (error) throw error;
+      setNotice("其他登入的續期已取消；已發出的存取權杖到期前仍可能有效。捷徑裝置需在 iPhone 設定另行解除。");
+    } catch { setNotice("未完成登出其他瀏覽器，請稍後再試。"); }
     finally { setBusy(false); }
   };
   return <section className="ls-general-settings" aria-label="一般設定">
@@ -52,10 +68,10 @@ export function AccountSettings({ session, client, onSignOut }: Props) {
     </div>
     <div className="ls-general-card">
       <h3>顯示與記帳偏好</h3><div className="ls-general-grid">
-        <label>顯示模式<select aria-label="顯示模式" value={theme} onChange={e=>{setTheme(e.target.value);saveLocal("theme",e.target.value);}}><option value="system">跟隨系統（目前網站配色）</option><option value="light">偏好明亮</option><option value="dark">偏好深色</option></select></label>
+        <label>顯示模式<select aria-label="顯示模式" value={theme} onChange={e=>{setTheme(e.target.value);saveLocal("theme",e.target.value);}}><option value="system">跟隨系統</option><option value="light">明亮</option><option value="dark">深色</option></select></label>
         <label>預設檢視幣別<select aria-label="預設檢視幣別" value={currency} onChange={e=>{setCurrency(e.target.value);saveLocal("currency",e.target.value);}}><option value="TWD">TWD 新台幣</option><option value="USD">USD 美元</option><option value="JPY">JPY 日圓</option></select></label>
       </div>
-      <small>目前只儲存偏好，未全面切換深色主題，也不會轉換交易幣別或匯率。</small>
+      <small>顯示模式與預設檢視幣別會立即套用，僅儲存在這台裝置；不會轉換交易金額或匯率。雲端偏好同步仍待正式發布。</small>
     </div>
     <div className="ls-general-card">
       <h3>登入與安全</h3>
@@ -67,7 +83,7 @@ export function AccountSettings({ session, client, onSignOut }: Props) {
         </div><button className="ls-button ls-primary" disabled={busy || !currentPassword || !newPassword} onClick={()=>void changePassword()}>{busy?"驗證中…":"更新密碼"}</button>
         <p>忘記密碼？登出後可使用先前保存的復原碼重設。</p>
       </> : <p>此帳號由 Google 驗證身份。若要修改 Google 密碼或復原方式，請使用 Google 帳號的安全設定。</p>}
-      <button className="ls-button ls-secondary" type="button" onClick={onSignOut}>登出這台裝置</button>
+      <div className="lf-inline-actions"><button className="ls-button ls-secondary" type="button" disabled={busy} onClick={onSignOut}>登出這台裝置</button><button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void signOutOthers()}>登出其他瀏覽器</button></div>
       <a className="ls-general-link" href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Google 帳號安全中心</a>
     </div>
     <div className="ls-general-card"><h3>資料與隱私</h3><p>「交易」頁可篩選、下載 CSV；若要刪除整個帳號與交易，需先驗證所有權。</p>

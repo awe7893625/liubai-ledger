@@ -6,6 +6,7 @@ import {
 } from "../_shared/cloud.js";
 
 import budgetHandler from "../_shared/budget-handler.js";
+import categoryHandler from "../_shared/category-handler.js";
 
 const DEFAULT_CATEGORIES = [
   ["餐飲", "food"],
@@ -20,6 +21,7 @@ const DEFAULT_CATEGORIES = [
 
 export default async function handler(req, res) {
   if (req.query?.resource === "budgets") return budgetHandler(req, res);
+  if (req.query?.resource === "categories") return categoryHandler(req, res);
   if (req.query?.resource) return send(res, 400, { ok: false, error: "Unknown resource" });
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");

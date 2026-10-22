@@ -26,6 +26,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./site.css";
 import { PaymentSettings } from "./PaymentSettings";
 import { AccountSettings } from "./AccountSettings";
+import { CategorySettings } from "./CategorySettings";
+import { LedgerFreshness, LedgerHistory } from "./LedgerHistory";
+import { sortLedger, groupLedger } from "./ledger-view";
+import type { LedgerSort } from "./ledger-view";
+import { useAppViewport } from "./use-app-viewport";
+import { defaultAppearance, readDeviceAppearance } from "./device-appearance";
+import type { DeviceAppearance } from "./device-appearance";
 import { SpendingInsights } from "./SpendingInsights";
 import { LedgerExplore } from "./LedgerExplore";
 import type { QuickDraft } from "./explore-data";
@@ -36,6 +43,7 @@ import { currentMonth, ledgerDay, summarizeMonth, filterLedger, ledgerCsv, loadA
 import "./launch.css";
 import "./mobile-polish.css";
 import "./edit-transaction.css";
+import "./product-finish.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
@@ -245,6 +253,15 @@ async function cloudRequest<T>(
 
 export function CloudConnect() {
   const [session, setSession] = useState<Session | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [appearance, setAppearance] = useState<DeviceAppearance>(defaultAppearance);
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
+  useAppViewport(Boolean(session));
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const changed = () => setSystemDark(media.matches);
+    media.addEventListener("change", changed); return () => media.removeEventListener("change", changed);
+  }, []);
   const [authChecking, setAuthChecking] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
@@ -265,9 +282,9 @@ export function CloudConnect() {
   const [googleSigningIn, setGoogleSigningIn] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const googleEnabled = Boolean(GOOGLE_WEB_CLIENT_ID);
-  const [settingsSection, setSettingsSection] = useState<"general" | "shortcuts">(() => {
+  const [settingsSection, setSettingsSection] = useState<"general" | "payments" | "shortcuts">(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("section") === "shortcuts" || params.get("paired") === "1" ? "shortcuts" : "general";
+    return params.get("section") === "shortcuts" || params.get("paired") === "1" ? "shortcuts" : params.get("section") === "payments" ? "payments" : "general";
   });
   const [activeTab, setActiveTab] = useState<"home" | "capture" | "transactions" | "explore" | "settings">(() => {
     const params = new URLSearchParams(window.location.search);
@@ -290,6 +307,9 @@ export function CloudConnect() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedCurrency, setSelectedCurrency] = useState("");
+  const [selectedSource, setSelectedSource] = useState("");
+  const [sortOrder, setSortOrder] = useState<LedgerSort>("newest");
   const [visibleCount, setVisibleCount] = useState(100);
   const [editing, setEditing] = useState<CloudTransaction | null>(null);
 
@@ -313,13 +333,19 @@ export function CloudConnect() {
   const summary = useMemo(() => summarizeMonth(transactions, overviewMonth, overviewCurrency), [transactions, overviewMonth, overviewCurrency]);
   const months = useMemo(() => [...new Set([currentMonth(), ...transactions.map((tx) => ledgerDay(tx).slice(0, 7)).filter(Boolean)])].sort().reverse(), [transactions]);
   const currencies = useMemo(() => [...new Set(["TWD", ...transactions.map((tx) => tx.currency.trim())])].sort(), [transactions]);
-  const filteredTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || tx.status === selectedStatus)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus]);
+  const matchingTransactions = useMemo(() => filterLedger(transactions, filterMonth, search, accountById, categoryById).filter((tx) => (!selectedAccount || tx.account_id === selectedAccount) && (!selectedCategory || (selectedCategory === "__uncategorized__" ? !tx.category_id : tx.category_id === selectedCategory)) && (!selectedStatus || tx.status === selectedStatus) && (!selectedCurrency || tx.currency.trim() === selectedCurrency) && (!selectedSource || tx.source === selectedSource)), [transactions, filterMonth, search, accountById, categoryById, selectedAccount, selectedCategory, selectedStatus, selectedCurrency, selectedSource]);
+  const oneCurrency = new Set(matchingTransactions.map((tx) => tx.currency.trim())).size <= 1;
+  const effectiveSort = sortOrder.startsWith("amount") && !oneCurrency ? "newest" : sortOrder;
+  const filteredTransactions = useMemo(() => sortLedger(matchingTransactions, effectiveSort), [matchingTransactions, effectiveSort]);
+  const clearFilters = () => { setSearch(""); setFilterMonth(""); setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus(""); setSelectedCurrency(""); setSelectedSource(""); setSortOrder("newest"); setVisibleCount(100); }; 
+  const showMonth = (month: string) => { clearFilters(); setOverviewMonth(month); setFilterMonth(month); setActiveTab("transactions"); };
   const captureCurrency = accountById.get(accountId)?.currency.trim() || "TWD";
   const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
   const displayName = useMemo(() => {
-    const raw = session?.user.user_metadata?.display_name || session?.user.user_metadata?.username;
+    const raw = appearance.nickname || session?.user.user_metadata?.display_name || session?.user.user_metadata?.username;
     return typeof raw === "string" && raw.trim() ? raw.trim() : "我的帳本";
-  }, [session]);
+  }, [session, appearance.nickname]);
+  const applyAppearance = (value: DeviceAppearance) => { setAppearance(value); setOverviewCurrency(value.currency); };
 
   const loadCloudData = useCallback(async () => {
     if (!supabase || !session) return;
@@ -376,7 +402,9 @@ export function CloudConnect() {
         setLoadedAt(null); setDataLoading(Boolean(next)); setBusy(false);
         setSearch(""); setFilterMonth(""); setVisibleCount(100);
         setSelectedAccount(""); setSelectedCategory(""); setSelectedStatus("");
-        setOverviewMonth(currentMonth()); setOverviewCurrency("TWD");
+        setSelectedCurrency(""); setSelectedSource(""); setSortOrder("newest");
+        const local = nextId ? readDeviceAppearance(nextId) : { ...defaultAppearance };
+        setAppearance(local); setOverviewMonth(currentMonth()); setOverviewCurrency(local.currency);
         setEditing(null);
         manualRequest.current = null; submitLock.current = false;
       }
@@ -462,7 +490,15 @@ export function CloudConnect() {
     void loadCloudData().catch(() => { /* Persistent inline error, never an empty-ledger success. */ });
   }, [session, loadCloudData]);
 
-  useEffect(() => { window.scrollTo(0, 0); }, [activeTab, session?.user.id]);
+  useEffect(() => { contentRef.current?.scrollTo(0, 0); window.scrollTo(0, 0); }, [activeTab, settingsSection, session?.user.id]);
+  useEffect(() => {
+    if (!session) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", activeTab);
+    if (activeTab === "settings") url.searchParams.set("section", settingsSection); else url.searchParams.delete("section");
+    url.searchParams.delete("paired");
+    window.history.replaceState(null, "", url.pathname + url.search);
+  }, [activeTab, settingsSection, session]);
 
   useEffect(() => {
     if (!/^(✅|已匯出|交易已刪除|復原碼已複製)/.test(message)) return;
@@ -610,6 +646,12 @@ export function CloudConnect() {
     }
   };
 
+  const signOutLocal = async () => {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) setMessage("登出未完成，請確認網路後再試。");
+  };
+
   const startPairing = async () => {
     if (!session) return;
     setBusy(true);
@@ -713,6 +755,10 @@ export function CloudConnect() {
       </div>
     );
 
+    const renderTransactionGroups = (items: CloudTransaction[]) => effectiveSort.startsWith("amount") ? renderTransactionRows(items) : (
+      <div className="lf-day-groups">{groupLedger(items).map((group) => <section key={group.day || "unknown"} aria-label={`交易日期 ${group.day || "未知"}`}><header><h2>{group.day ? group.day.replace(/-/g, "/") : "日期待確認"}</h2><span>{group.rows.length} 筆</span></header><p className="lf-day-totals">{group.totals.map((total) => <span key={total.currency}>{total.currency} 支出 {absoluteMoneyFromMinor(total.expense, total.currency)} · 收入 {absoluteMoneyFromMinor(total.income, total.currency)}{total.refund ? ` · 退款 ${absoluteMoneyFromMinor(total.refund, total.currency)}` : ""}</span>)}</p>{renderTransactionRows(group.rows)}</section>)}</div>
+    );
+
     const navItems = [
       { id: "home" as const, label: "首頁", icon: Home },
       { id: "capture" as const, label: "記一筆", icon: Plus },
@@ -722,7 +768,7 @@ export function CloudConnect() {
     ];
 
     return (
-      <main className="ledger-site ls-app-root">
+      <main className="ledger-site ls-app-root" data-theme={appearance.theme === "system" ? systemDark ? "dark" : "light" : appearance.theme}>
         <section className="ls-app-shell">
           <header className="ls-app-topbar">
             <button className="ls-app-brand" type="button" onClick={() => setActiveTab("home")} aria-label="回到帳本首頁">
@@ -736,12 +782,12 @@ export function CloudConnect() {
                 </button>
               ))}
             </nav>
-            <button className="ls-app-signout" type="button" onClick={() => void supabase?.auth.signOut()}>
+            <button className="ls-app-signout" type="button" aria-label="登出這台裝置" onClick={() => void signOutLocal()}>
               <LogOut size={16} /><span>登出</span>
             </button>
           </header>
 
-          <div className="ls-app-main">
+          <div className="ls-app-main" ref={contentRef} aria-label="帳本內容區" tabIndex={-1}>
             {editing ? <TransactionEditor key={`${session.user.id}-${editing.id}`} transaction={editing} accounts={accounts} categories={categories} onSave={saveEdit} onClose={() => { if (!busy) setEditing(null); }} /> : null}
             {dataError ? <div className="ls-load-error" role="alert"><div><strong>帳本尚未完整更新</strong><p>{dataError}{loadedAt ? " 下方保留上次成功載入的資料。" : " 這不代表帳本沒有交易。"}</p></div><button type="button" className="ls-button ls-secondary" disabled={dataLoading} onClick={() => void loadCloudData().catch(() => {})}>重試載入</button></div> : null}
             {dataLoading ? <p className="ls-load-state" role="status">正在同步帳本…</p> : null}
@@ -762,13 +808,14 @@ export function CloudConnect() {
                   <div>
                     <p>{displayName}</p>
                     <h1>我的帳本</h1>
-                    <span>今天的支出、最近交易，都在這裡。</span>
+                    <span>當月收支、最近交易與捷徑記帳。</span>
                   </div>
                   <button className="ls-button ls-primary ls-app-primary-action" type="button" onClick={() => setActiveTab("capture")}>
                     <Plus size={17} /> 記一筆
                   </button>
                 </section>
 
+                <LedgerFreshness rows={transactions} loadedAt={loadedAt} loading={dataLoading} failed={Boolean(dataError)} onLatest={showMonth} />
                 <ShortcutOnboarding key={`home-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
                 <div className="ls-ledger-period"><label>總覽月份<select aria-label="總覽月份" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)}>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><label>幣別<select aria-label="總覽幣別" value={overviewCurrency} onChange={(event) => setOverviewCurrency(event.target.value)}>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><small>只計已確認交易；轉帳不列收支</small></div>
                 <section className="ls-app-stat-grid" aria-label="月份總覽">
@@ -850,11 +897,11 @@ export function CloudConnect() {
                     <RefreshCw size={16} /> 重新整理
                   </button>
                 </section>
-                {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整帳本；下方商家、帳戶篩選只影響明細。</p><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><BudgetPanel key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}
+                {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整雲端帳本；下方商家、帳戶篩選只影響明細。</p><LedgerHistory rows={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} onMonth={(month) => { showMonth(month); setSelectedCurrency(overviewCurrency); }} /><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><BudgetPanel key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}
                 <div className="ls-transaction-toolbar"><label>搜尋<input aria-label="搜尋交易" type="search" placeholder="商家、卡片、分類、備註" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(100); }} /></label><label>月份<select aria-label="交易月份" value={filterMonth} onChange={(event) => { setFilterMonth(event.target.value); if (event.target.value) setOverviewMonth(event.target.value); setVisibleCount(100); }}><option value="">全部月份</option>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><button className="ls-button ls-secondary" type="button" disabled={!loadedAt || dataLoading || Boolean(dataError) || !filteredTransactions.length} onClick={exportTransactions}><Download size={16} /> 匯出 CSV</button></div>
-                <div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option><option value="__uncategorized__">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option></select></label></div>
+                <details className="lf-more-filters"><summary>更多篩選與排序{selectedAccount || selectedCategory || selectedStatus || selectedCurrency || selectedSource ? " · 已套用" : ""}</summary><div className="ls-transaction-toolbar"><label>帳戶<select aria-label="篩選帳戶" value={selectedAccount} onChange={(e) => {setSelectedAccount(e.target.value);setVisibleCount(100);}}><option value="">全部帳戶</option>{accounts.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>分類<select aria-label="篩選分類" value={selectedCategory} onChange={(e) => {setSelectedCategory(e.target.value);setVisibleCount(100);}}><option value="">全部分類</option><option value="__uncategorized__">未分類</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>狀態<select aria-label="篩選狀態" value={selectedStatus} onChange={(e) => {setSelectedStatus(e.target.value);setVisibleCount(100);}}><option value="">全部狀態</option><option value="confirmed">已確認</option><option value="pending">待確認</option><option value="duplicate">重複</option><option value="error">需處理</option></select></label></div><div className="ls-transaction-toolbar"><label>幣別<select aria-label="篩選幣別" value={selectedCurrency} onChange={(event) => { setSelectedCurrency(event.target.value); setVisibleCount(100); }}><option value="">全部（不換算）</option>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><label>記帳來源<select aria-label="篩選來源" value={selectedSource} onChange={(event) => { setSelectedSource(event.target.value); setVisibleCount(100); }}><option value="">全部來源</option>{["manual", "apple_pay", "notification", "statement", "capture", "email"].map((source) => <option key={source} value={source}>{sourceLabel(source as CloudTransaction["source"])}</option>)}</select></label><label>排序<select aria-label="交易排序" value={effectiveSort} onChange={(event) => { setSortOrder(event.target.value as LedgerSort); setVisibleCount(100); }}><option value="newest">最新在前</option><option value="oldest">最舊在前</option><option value="amount_desc" disabled={!oneCurrency}>金額由大到小</option><option value="amount_asc" disabled={!oneCurrency}>金額由小到大</option></select></label></div>{!oneCurrency ? <p className="lf-helper">依金額排序需先篩選單一幣別，避免直接比較台幣與外幣。</p> : null}<button type="button" className="ls-button ls-secondary" onClick={clearFilters}>清除所有篩選</button></details>
                 <section className="ls-app-panel">
-                  {!loadedAt ? <p className="ls-load-state">{dataError ? "尚未載入，請按重試；不是空白帳本。" : "正在載入交易…"}</p> : filteredTransactions.length > 0 ? <>{renderTransactionRows(filteredTransactions.slice(0, visibleCount))}{filteredTransactions.length > visibleCount ? <button className="ls-button ls-secondary ls-load-more" onClick={() => setVisibleCount((count) => count + 100)}>顯示更多（尚有 {filteredTransactions.length - visibleCount} 筆）</button> : null}</> : (
+                  {!loadedAt ? <p className="ls-load-state">{dataError ? "尚未載入，請按重試；不是空白帳本。" : "正在載入交易…"}</p> : filteredTransactions.length > 0 ? <>{renderTransactionGroups(filteredTransactions.slice(0, visibleCount))}{filteredTransactions.length > visibleCount ? <button className="ls-button ls-secondary ls-load-more" onClick={() => setVisibleCount((count) => count + 100)}>顯示更多（尚有 {filteredTransactions.length - visibleCount} 筆）</button> : null}</> : (
                     <div className="ls-app-empty"><span className="ls-app-empty-icon"><Receipt size={22} /></span><strong>{transactions.length ? "沒有符合的交易" : "還沒有交易"}</strong><p>{transactions.length ? "試試其他月份或搜尋文字。" : "新增第一筆後，交易會出現在這裡。"}</p><button className="ls-button ls-primary" type="button" onClick={() => setActiveTab("capture")}><Plus size={16} /> 記一筆</button></div>
                   )}
                 </section>
@@ -868,11 +915,11 @@ export function CloudConnect() {
                 <section className="ls-app-page-head">
                   <div><p>設定</p><h1>帳號與設定</h1><span>管理帳號、安全、偏好與 iPhone 捷徑。</span></div>
                 </section>
-                <div className="ls-direction-switch" role="group" aria-label="設定分類"><button type="button" aria-pressed={settingsSection === "general"} onClick={() => setSettingsSection("general")}>一般設定</button><button type="button" aria-pressed={settingsSection === "shortcuts"} onClick={() => setSettingsSection("shortcuts")}>iPhone 自動記帳</button></div>
-                {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} onSignOut={() => void supabase?.auth.signOut()} /> : <>
+                <div className="ls-direction-switch" role="group" aria-label="設定分類"><button type="button" aria-pressed={settingsSection === "general"} onClick={() => setSettingsSection("general")}>一般設定</button><button type="button" aria-pressed={settingsSection === "payments"} onClick={() => setSettingsSection("payments")}>付款與分類</button><button type="button" aria-pressed={settingsSection === "shortcuts"} onClick={() => setSettingsSection("shortcuts")}>iPhone 捷徑</button></div>
+                {settingsSection === "general" ? <AccountSettings key={session.user.id} session={session} client={supabase!} onDisplayChange={applyAppearance} onSignOut={() => void signOutLocal()} /> : settingsSection === "payments" ? <><PaymentSettings session={session} onChanged={loadCloudData} /><CategorySettings key={session.user.id} session={session} categories={categories} onChanged={loadCloudData} /></> : <>
                 <details className="ls-beta-help"><summary>公開測試版：開始使用與支援</summary><p>登入後即可在「記一筆」新增支出或收入；「交易」可搜尋、切換月份，並匯出目前篩選的 CSV。每個人的付款方式與交易獨立保存。</p><p>免費 Beta 目前最多 500 個帳號，每帳號 5 台啟用裝置。銀行自動同步不在目前承諾範圍；請保留重要交易的原始收據與帳單。</p><p>iPhone 捷徑屬進階 Beta。首次需在自己的手機安裝、授權與配對；配對成功不代表 Apple Pay 真機觸發已驗收。網站／App 付款不保證觸發，可用手動記帳補記。</p><div className="ls-beta-links"><a href="mailto:asdapper8866@gmail.com?subject=Ledger%20Beta%20Support">回報問題／申請帳號刪除</a><a href="/privacy">隱私權</a><a href="/terms">服務條款</a></div></details>
                 <ShortcutOnboarding key={`setup-${session.user.id}`} session={session} pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
-                <PaymentSettings session={session} onChanged={loadCloudData} />
+                <p className="lf-helper">信用卡與 Wallet 別名請到「付款與分類」管理，手動捷徑會讀取你自己的選項。</p>
 
                 <section className="ls-app-panel">
                   <div className="ls-app-panel-head"><div><p>Devices</p><h2>已連接裝置</h2></div>{paired && activeDevices.length > 0 ? <span className="ls-success-pill"><CheckCircle2 size={15} /> 已連接裝置</span> : null}</div>
