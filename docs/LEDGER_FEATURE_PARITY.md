@@ -10,7 +10,7 @@ Updated: 2026-10-23. This is an acceptance inventory, not a completion percentag
 | Payment accounts | Per-user cards/cash/bank/wallet labels, exact Wallet aliases, create/edit | Full balance/statement/billing-cycle management |
 | Shortcuts | Signed manual/Wallet downloads, per-device pairing, receipts, safe manual retry protocol, manual-first onboarding | Real iPhone action compatibility, native drafts, Wallet NFC acceptance; online Apple Pay not promised |
 | Settings | Google/username login, password workflow, account/security view, working device-local theme/name/currency, local/other-browser logout, service diagnostics | Cloud-synced preferences and complete account-management lifecycle remain pending |
-| Private data | One historical import completed; offline reconciliation contract now source-reviewed with synthetic edit/delete/duplicate tests | No new authorized live snapshots/import; no production incremental executor or continuous sync claim |
+| Private data | One historical import completed; offline reconciliation, consistent owner-local SQLite backup and private-source snapshot adapter with synthetic restore tests | No authorized cloud-current reconciliation/import; no production incremental executor or continuous sync claim |
 | Map | Shipped exploration slice: existing note coordinates, month/day/currency filter, consent-gated OpenStreetMap viewport, no inferred locations | New GPS ingestion, native Shortcut position capture and full private-map parity remain unfinished |
 | Assistant | Shipped deterministic ledger query/evidence and short-text draft handoff; no automatic writes or external AI | Generative AI, receipt OCR, voice workflow and broader original-assistant parity remain unfinished |
 
@@ -42,6 +42,17 @@ Both pending migration hashes are now mandatory in the release preflight.
 unpatched negative control. No previously blocked action was delegated or retried.
 See `LUNA_CORE_RECONCILIATION_20261023.md` for input contracts, reviewer findings,
 actual test evidence and the remaining owner/host approval gates.
+
+## Owner-local source backup and handoff (not a cloud release)
+
+An M4-local consistent source backup has been verified by a full independent
+SQLite restore, with private owner-only file permissions. Reproducible tooling
+`scripts/backup_m4_source.py` and `scripts/prepare_m4_snapshot.py` is present
+for authorized local backup and offline review. These tools **cannot read or
+modify Supabase**, and raw financial source files must never be committed.
+See `docs/M4_SOURCE_BACKUP_AND_SYNC_GATES.md`. Previous safety rejection of
+the current cloud read remains unresolved, so neither an incremental insert
+count nor newly deployed planning features is asserted.
 
 ## Release discipline
 
