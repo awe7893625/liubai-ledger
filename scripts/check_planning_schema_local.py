@@ -10,7 +10,10 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = 'public.ecr.aws/supabase/postgres:17.11.0.004'
-MIGRATION = ROOT / 'cloud/supabase/migrations/20261022101858_planning_and_preferences.sql'
+MIGRATIONS = [ROOT / 'cloud/supabase/migrations' / name for name in (
+    '20261022101858_planning_and_preferences.sql',
+    '20261023074854_planning_reference_ownership.sql',
+)]
 
 
 def main():
@@ -88,9 +91,16 @@ END $$;
 RESET ROLE;
 SELECT 'PASS isolated schema constraints, payment unlink and RLS';
 """
-        result=command(['docker','exec','-i',name,'psql','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'], input=scaffold+'\n'+MIGRATION.read_text()+'\n'+checks)
+        ownership_checks = (ROOT/'scripts/tests/planning_reference_ownership.sql').read_text()
+        # Negative control proves the tests catch the original missing owner FK.
+        created = command(['docker','exec',name,'psql','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1','-c','CREATE DATABASE ledger_negative'])
+        if created.returncode: raise RuntimeError('Cannot create isolated negative-control database')
+        negative = command(['docker','exec','-i',name,'psql','-U','supabase_admin','-d','ledger_negative','-v','ON_ERROR_STOP=1'], input=scaffold+'\n'+MIGRATIONS[0].read_text()+'\n'+checks+'\n'+ownership_checks)
+        if negative.returncode == 0 or 'foreign preference account accepted' not in negative.stderr:
+            raise RuntimeError('Negative control did not detect missing tenant reference constraint')
+        result=command(['docker','exec','-i',name,'psql','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'], input=scaffold+'\n'+'\n'.join(path.read_text() for path in MIGRATIONS)+'\n'+checks+'\n'+ownership_checks)
         if result.returncode:raise RuntimeError('Schema validation failed: '+result.stderr[-900:])
-        print(json.dumps({'status':'PASS','database':'isolated container; network disabled','checks':['migration compiles','own-row RLS','anonymous reads denied','browser writes denied','unique payment link','cross-owner foreign key','deleted payment clears reference']},indent=2))
+        print(json.dumps({'status':'PASS','database':'isolated container; network disabled','checks':['migration compiles','own-row RLS','anonymous reads denied','browser writes denied','unique payment link','cross-owner plan reference','deleted payment clears reference','cross-owner preference account denied','cross-owner preference category denied','cross-owner scheduled account denied','cross-owner scheduled category denied','cross-owner payment transaction denied','same-owner optional references accepted','optional delete preserves owning user','all browser mutations denied','unpatched-schema negative control fails as expected']},indent=2))
     finally:
         if started:
             result=command(['docker','rm','--force',name])
