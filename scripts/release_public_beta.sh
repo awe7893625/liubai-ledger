@@ -18,7 +18,9 @@ PY
 cd "$ROOT"
 git diff --check
 python3 scripts/check_cloud_v2.py
-python3 -m py_compile scripts/e2e_public_launch.py scripts/e2e_shortcuts_v2.py
+python3 -m py_compile scripts/e2e_public_launch.py scripts/e2e_shortcuts_v2.py scripts/ledger_reconcile.py scripts/check_planning_schema_ready.py
+# Pure snapshots/fake cursors only; no hosted DB/API requests or financial data.
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 (
   cd "$FRONTEND"
   npm run typecheck
