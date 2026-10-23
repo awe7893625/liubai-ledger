@@ -217,6 +217,32 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(result['counts'], {'already_present':157, 'append_candidate':150, 'cloud_deleted_preserve':1, 'cloud_edited_preserve':1})
         self.assertEqual(result['write_operations'], [])
 
+    def test_non_superset_inventory_preserves_missing_rows_and_reviews_collisions(self):
+        # Synthetic regression: net count growth is NOT an insertion count.
+        values = fixture()
+        baseline_rows = [source_row('baseline-'+str(i), amount=-(i+1)*100) for i in range(159)]
+        fresh_rows = [source_row('fresh-'+str(i), amount=-(i+1001)*100) for i in range(159)]
+        # Two legitimate-looking same-day records must remain a human review pair.
+        fresh_rows[-1] = copy.deepcopy(fresh_rows[-2]); fresh_rows[-1]['id'] = 'fresh-158'
+        values[0]['transactions'] = copy.deepcopy(baseline_rows[:154]) + fresh_rows
+        values[1]['transactions'] = [cloud_row(row) for row in baseline_rows]
+        values[2]['entries'] = [{'legacy_id':row['id'], 'source_at_import':copy.deepcopy(row), 'cloud_at_import':cloud_row(row)} for row in baseline_rows]
+        values[3]['baseline_sha256'] = m.digest(values[2])
+        # Same ID/amount/date does not imply unchanged semantics or categorization.
+        values[0]['transactions'][0].update(description='Source correction', notes='Updated note', merchant_normalized='corrected merchant')
+        result = plan(values)
+        self.assertEqual(result['source_count'],313)
+        self.assertEqual(result['cloud_count'],159)
+        self.assertEqual(result['counts'], {'already_present':153, 'source_changed_review':1,
+            'append_candidate':157, 'source_near_duplicate_review':2, 'source_missing_preserve':5})
+        self.assertEqual(len(result['decisions']),318)
+        self.assertNotEqual(result['counts']['append_candidate'],result['source_count']-result['cloud_count'])
+        self.assertEqual(result['write_operations'],[])
+        self.assertEqual(result['delete_operations'],[])
+        # A simultaneous cloud edit is a conflict, not permission for source-wins.
+        values[1]['transactions'][0]['note'] = 'Phone correction'
+        self.assertEqual(classify(plan(values),'baseline-0'),'both_changed_review')
+
     def test_zero_amount_is_not_an_append_candidate(self):
         values = fixture(); values[0]['transactions'][1].update(amount=0, kind='unknown')
         self.assertEqual(classify(plan(values),'new'), 'incomplete_source_review')
