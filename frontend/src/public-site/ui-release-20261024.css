@@ -1,0 +1,41 @@
+/* Ledger public beta / 2026-10-24: verified small-screen affordances.
+   Rules are deliberately scoped to the signed-in SaaS shell. */
+.ls-app-root .ls-direction-switch.ti-capture-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  align-items: stretch;
+}
+.ls-app-root .ls-direction-switch.ti-capture-kinds > button {
+  min-width: 0;
+  min-height: 44px;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.ls-app-root .ls-app-page-head > .ls-app-refresh {
+  display: inline-flex;
+  flex-shrink: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  white-space: nowrap;
+  padding: 9px 13px;
+}
+.ls-app-root .ls-app-refresh svg { flex-shrink: 0; }
+@media (max-width: 400px) {
+  .ls-app-root .ls-app-page-head > .ls-app-refresh {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 10px;
+    border-radius: 13px;
+  }
+  .ls-app-root .ls-app-refresh > span { display: none; }
+}
+@media (max-width: 350px) {
+  .ls-app-root .ls-direction-switch.ti-capture-kinds > button {
+    font-size: 13px;
+  }
+}

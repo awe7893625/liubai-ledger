@@ -50,6 +50,7 @@ import "./launch.css";
 import "./mobile-polish.css";
 import "./edit-transaction.css";
 import "./product-finish.css";
+import "./ui-release-20261024.css";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? "";
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
@@ -859,7 +860,7 @@ export function CloudConnect() {
                 </section>
 
                 <LedgerFreshness rows={transactions} loadedAt={loadedAt} loading={dataLoading} failed={Boolean(dataError)} onLatest={showMonth} />
-                <ShortcutOnboarding key={`home-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} />
+                {recentTransactions.length === 0 ? <ShortcutOnboarding key={`home-empty-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} /> : null}
                 <div className="ls-ledger-period"><label>總覽月份<select aria-label="總覽月份" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)}>{months.map((month) => <option key={month} value={month}>{month}</option>)}</select></label><label>幣別<select aria-label="總覽幣別" value={overviewCurrency} onChange={(event) => setOverviewCurrency(event.target.value)}>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label><small>只計已確認交易；轉帳不列收支</small></div>
                 <section className="ls-app-stat-grid" aria-label="月份總覽">
                   <article className="ls-app-stat ls-app-stat-primary">
@@ -897,6 +898,7 @@ export function CloudConnect() {
                   )}
                 </section>
 
+                {recentTransactions.length > 0 ? <ShortcutOnboarding key={`home-existing-${session.user.id}`} session={session} compact pairingBusy={busy} onPair={startPairing} onOpenSettings={openShortcutSettings} /> : null}
                 <details className="ls-month-tools"><summary>月預算與分類額度 · {overviewMonth}</summary><BudgetPanel key={`budget-home-${session.user.id}-${overviewMonth}-${overviewCurrency}`} session={session} month={overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details>
                 <section className="ls-app-quick-grid">
                   <button type="button" onClick={() => setActiveTab("capture")}><span><Plus size={18} /></span><strong>快速記帳</strong><small>新增一筆支出</small></button>
@@ -937,8 +939,8 @@ export function CloudConnect() {
               <div className="ls-app-page">
                 <section className="ls-app-page-head">
                   <div><p>Ledger</p><h1>交易紀錄</h1><span>{loadedAt ? `共 ${transactions.length} 筆，符合篩選 ${filteredTransactions.length} 筆` : "正在載入帳本"}；依原始日期排列。</span></div>
-                  <button className="ls-button ls-secondary" type="button" disabled={busy} onClick={() => void loadCloudData().catch(() => setMessage("重新整理失敗，請稍後再試。"))}>
-                    <RefreshCw size={16} /> 重新整理
+                  <button className="ls-button ls-secondary ls-app-refresh" type="button" aria-label="重新整理" title="重新整理交易紀錄" disabled={busy} onClick={() => void loadCloudData().catch(() => setMessage("重新整理失敗，請稍後再試。"))}>
+                    <RefreshCw size={16} /><span>重新整理</span>
                   </button>
                 </section>
                 {loadedAt && !dataError ? <details className="ls-month-tools"><summary>分析與預算 · {filterMonth || overviewMonth} · {overviewCurrency}</summary><p>依目前月份與幣別計算完整雲端帳本；下方商家、帳戶篩選只影響明細。</p><LedgerHistory rows={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} onMonth={(month) => { showMonth(month); setSelectedCurrency(overviewCurrency); }} /><SpendingInsights transactions={transactions} month={filterMonth || overviewMonth} currency={overviewCurrency} categories={categories} accounts={accounts} onFilterCategory={(id)=>{setSelectedCategory(id || "__uncategorized__");setSelectedAccount("");setSelectedStatus("confirmed");setSearch("");setFilterMonth(filterMonth || overviewMonth);setVisibleCount(100);}} /><BudgetPanel key={`budget-tx-${session.user.id}-${filterMonth || overviewMonth}-${overviewCurrency}`} session={session} month={filterMonth || overviewMonth} currency={overviewCurrency} transactions={transactions} categories={categories} dataReady={Boolean(loadedAt) && !dataError && !dataLoading} /></details> : null}

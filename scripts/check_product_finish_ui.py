@@ -69,16 +69,31 @@ with sync_playwright() as pw:
      assert boxes['main']['bottom']<=boxes['nav']['top']+1,boxes
      assert boxes['nav']['bottom']<=boxes['vh']+1,boxes
    layout();page.screenshot(path=str(OUT/f'home-{engine}-{width}.png'))
+   latest=page.get_by_role('heading',name='最新紀錄',exact=True).bounding_box()
+   onboarding=page.locator('.ls-shortcut-banner').first.bounding_box()
+   assert latest and onboarding and latest['y'] < onboarding['y'], 'Onboarding pushes transactions below the ledger'
    page.locator('.lf-freshness summary').click();page.get_by_text('重新整理只讀取目前雲端帳本',exact=False).wait_for()
    checks.append({'name':f'{engine}-{width} home viewport reserves header/nav and distinguishes data freshness','status':'PASS'})
-   go('記一筆');page.get_by_label('金額',exact=True).fill('12.50');page.get_by_label('商家 / 項目',exact=True).fill('測試表單')
+   go('記一筆')
+   kind_boxes=[button.bounding_box() for button in page.locator('.ti-capture-kinds button').all()]
+   assert len(kind_boxes)==3 and all(box is not None for box in kind_boxes)
+   assert max(box['y'] for box in kind_boxes)-min(box['y'] for box in kind_boxes)<3, 'Income/refund options wrapped to a second row'
+   page.get_by_label('金額',exact=True).fill('12.50');page.get_by_label('商家 / 項目',exact=True).fill('測試表單')
    save=page.get_by_role('button',name='儲存交易',exact=True);save.scroll_into_view_if_needed();layout()
    if width<=760:
     box=save.bounding_box();main=page.locator('.ls-app-main').bounding_box();assert box['y']>=main['y']-1 and box['y']+box['height']<=main['y']+main['height']+1
    date=page.locator('input[type="datetime-local"]').bounding_box();card=page.locator('.ls-app-capture-card').bounding_box();assert date['x']+date['width']<=card['x']+card['width']
-   page.screenshot(path=str(OUT/f'capture-{engine}-{width}.png'));save.click();page.get_by_role('heading',name='我的帳本',exact=True).wait_for();go('交易');page.get_by_text('測試表單',exact=True).wait_for()
+   page.screenshot(path=str(OUT/f'capture-{engine}-{width}.png'))
+   if width==390:
+    page.locator('.ls-app-main').evaluate('(el)=>{el.scrollTop=0}')
+    page.screenshot(path=str(OUT/f'capture-top-{engine}-{width}.png'))
+    save.scroll_into_view_if_needed()
+   save.click();page.get_by_role('heading',name='我的帳本',exact=True).wait_for();go('交易');page.get_by_text('測試表單',exact=True).wait_for()
    checks.append({'name':f'{engine}-{width} date field contained, save reachable and manual form completes','status':'PASS'})
-   go('交易');page.locator('.lf-more-filters summary').click()
+   go('交易')
+   refresh=page.get_by_role('button',name='重新整理',exact=True)
+   assert refresh.bounding_box()['height']<=52,'Refresh button wrapped and became too tall'
+   page.locator('.lf-more-filters summary').click()
    option=page.get_by_label('交易排序').locator('option[value="amount_desc"]')
    assert option.get_attribute('disabled') is not None, {'option':option.evaluate('(el)=>el.outerHTML'),'currency':page.get_by_label('篩選幣別').input_value(),'rows':page.locator('.ls-app-transaction-row').count(),'fixture_currencies':sorted({row['currency'] for row in state['rows']})}
    page.get_by_label('篩選幣別').select_option('TWD');page.get_by_label('交易排序').select_option('amount_desc')
@@ -89,13 +104,32 @@ with sync_playwright() as pw:
    exported=Path(info.value.path()).read_text(encoding='utf-8-sig');assert '測試咖啡' in exported and '-120.00' in exported and '測試 usd' not in exported
    page.get_by_role('button',name='清除所有篩選',exact=True).click();page.locator('.ls-month-tools > summary').click();page.get_by_role('region',name='六個月收支趨勢',exact=True).wait_for()
    history=page.get_by_role('region',name='六個月收支趨勢',exact=True);history.locator('details summary').click();assert history.locator('tbody tr').count()==6
-   layout();checks.append({'name':f'{engine}-{width} grouped/amount views, single-currency guard, exact CSV and trend evidence','status':'PASS'})
-   go('設定');page.get_by_role('button',name='付款與分類',exact=True).click();panel=page.get_by_role('region',name='分類管理',exact=True)
+   layout()
+   if width==390:
+    page.locator('.ls-month-tools > summary').click()
+    page.locator('.lf-more-filters > summary').click()
+    page.locator('.ls-app-toast').wait_for(state='hidden',timeout=10000)
+    page.locator('.ls-app-main').evaluate('(el)=>{el.scrollTop=0}')
+    page.screenshot(path=str(OUT/f'transactions-{engine}-{width}.png'))
+   checks.append({'name':f'{engine}-{width} grouped/amount views, single-currency guard, exact CSV and trend evidence','status':'PASS'})
+   go('設定');page.get_by_role('button',name='付款與分類',exact=True).click();
+   if width==390:
+    page.locator('.ls-app-main').evaluate('(el)=>{el.scrollTop=0}')
+    page.screenshot(path=str(OUT/f'settings-payments-{engine}-{width}.png'))
+   panel=page.get_by_role('region',name='分類管理',exact=True)
    panel.get_by_label('分類名稱',exact=True).fill('寵物');panel.get_by_role('button',name='新增分類',exact=True).click();panel.get_by_role('button',name='修改分類 寵物',exact=True).wait_for()
    panel.get_by_role('button',name='修改分類 餐飲',exact=True).click();panel.get_by_label('分類名稱',exact=True).fill('飲食');panel.get_by_role('button',name='儲存分類名稱',exact=True).click();panel.get_by_role('button',name='修改分類 飲食',exact=True).wait_for()
    assert state['rows'][0]['category_id']=='food';go('交易');assert page.get_by_text('飲食',exact=False).count()>0
    checks.append({'name':f'{engine}-{width} payment/categories section and rename preserves transaction links','status':'PASS'})
-   go('設定');page.get_by_role('button',name='一般設定',exact=True).click();page.get_by_label('顯示模式').select_option('dark')
+   go('設定')
+   page.get_by_role('button',name='iPhone 捷徑',exact=True).click()
+   page.get_by_role('heading',name='安裝手動捷徑，連接自己的帳本',exact=True).wait_for()
+   if width==390:
+    page.locator('.ls-app-main').evaluate('(el)=>{el.scrollTop=0}')
+    page.screenshot(path=str(OUT/f'settings-shortcuts-{engine}-{width}.png'))
+    page.get_by_role('heading',name='用手動捷徑成功記一筆',exact=True).scroll_into_view_if_needed()
+    page.screenshot(path=str(OUT/f'settings-shortcut-test-{engine}-{width}.png'))
+   page.get_by_role('button',name='一般設定',exact=True).click();page.get_by_label('顯示模式').select_option('dark')
    page.wait_for_function('document.querySelector(".ls-app-root")?.dataset.theme === "dark"')
    page.get_by_label('顯示暱稱').fill('本機驗收名稱');page.get_by_role('button',name='儲存暱稱',exact=True).click();layout();page.screenshot(path=str(OUT/f'settings-dark-{engine}-{width}.png'))
    page.once('dialog',lambda dialog:dialog.accept());page.get_by_role('button',name='登出其他瀏覽器',exact=True).click();page.get_by_text('其他登入的續期已取消',exact=False).wait_for();assert 'others' in state['logout_scopes'];assert page.locator('.ls-app-root').count()==1
@@ -103,6 +137,9 @@ with sync_playwright() as pw:
    page.reload(wait_until='networkidle');page.get_by_text('本機驗收名稱',exact=True).wait_for();assert page.locator('.ls-app-root').get_attribute('data-theme')=='dark'
    checks.append({'name':f'{engine}-{width} local appearance persists, other-session logout keeps current browser','status':'PASS'})
    go('探索');page.get_by_role('heading',name='查清楚，再記下一筆',exact=True).wait_for();layout()
+   if width==390:
+    page.locator('.ls-app-main').evaluate('(el)=>{el.scrollTop=0}')
+    page.screenshot(path=str(OUT/f'explore-{engine}-{width}.png'))
    if width<=760:
     page.set_viewport_size({'width':width,'height':500});page.wait_for_function('document.querySelector(".ls-app-root").getBoundingClientRect().height <= 501');layout();page.set_viewport_size({'width':width,'height':height})
    page.locator('.ls-app-signout').click();page.get_by_label('帳號名稱',exact=True).wait_for();assert state['logout_scopes'][-1]=='local';assert page.locator('.lx-answer').count()==0
