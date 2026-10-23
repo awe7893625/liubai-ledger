@@ -68,6 +68,48 @@ non-public, owner-protected directory; it does not grant cloud access. The
 offline reconciliation tool refuses stale snapshots (15-minute default), so a
 new review after that window requires a **new authorized, consistent snapshot**.
 
+## Verified M4 inventory — October 23, 2026 (read-only)
+
+An existing owner-protected source backup on M4 was independently decompressed
+and restored in memory. Its manifest and restored SQLite agree: **314
+transactions**, dated through October 23, with 11 July, 119 August, 95 September
+and 89 October rows. The archive was created at 21:09 Taiwan time, SHA-256
+verified, permission mode 0600, integrity checks passed. A later read-only
+source query still found 314; the original M4 database was not modified.
+
+Against the **original 159-row source export**, full hashed-ID intersection
+checks found 154 shared IDs, 5 old IDs absent from current M4 and 160
+current M4 IDs absent from that export. The five historical missing IDs
+all have **exact matching date/amount/currency/normalized-merchant
+signatures under replacement IDs** in current M4 (four marked capture, one
+email). Another two new IDs form a same-day/amount/merchant/account review
+pair. These are **possible replacements/duplicates, not authorization to
+exclude transactions**: legitimate same-day repeat purchases are possible.
+
+Reference analysis (without exporting any names or IDs) showed six of six
+original account IDs and 11 of 11 category IDs still exist in M4, and the
+account descriptors/category slugs match. Some transaction-to-account,
+category, normalized-merchant, description and note fields nevertheless
+differ across the 154 shared rows. Never overwrite those differences
+by rerunning the initial importer.
+
+This makes **314 − 159 = 155** merely a net row-count difference. There
+are 160 current source IDs absent from the old export; five of those
+match prior purchase signatures and two are in one source-side
+near-duplicate pair. The **actual cloud append list is unknown**, because
+a fresh authorized cloud-side transaction comparison was rejected by the
+tool safety check. The latest known cloud inventory was 159, not verified
+anew during this batch. No cloud reads/writes, raw financial exports,
+migration or public deployment are implied by these aggregate checks.
+
+The offline planner now checks both acknowledged historical and current
+cloud signatures and conservatively marks exact or weak historical
+matches for review, even after a cloud merchant edit or deletion.
+Confirmed `unknown`/unpaired `transfer` source kinds require explicit
+review; malformed cloud currency/merchant types fail closed. **All
+append_candidate decisions remain review-only and are never automatically
+executed.**
+
 ## Do not confuse counts with insertions
 
 If the live source count increases by N and the old cloud count stays fixed,

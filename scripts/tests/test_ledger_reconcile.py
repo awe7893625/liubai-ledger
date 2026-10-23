@@ -243,9 +243,97 @@ class ReconciliationTests(unittest.TestCase):
         values[1]['transactions'][0]['note'] = 'Phone correction'
         self.assertEqual(classify(plan(values),'baseline-0'),'both_changed_review')
 
+    def test_rekeyed_email_receipts_are_not_new_spending_in_314_row_topology(self):
+        # Purely synthetic mirror of the observed membership pattern:
+        # cloud 159 / source 314 / same IDs 154 / disappeared IDs 5 /
+        # new IDs 160, of which five represent old purchases and two
+        # form an independent same-day near-duplicate pair.
+        values = fixture()
+        baseline = [source_row('old-'+str(i), amount=-(i+1)*100,
+                               merchant='Synthetic shop '+str(i),
+                               source='email' if i >= 154 else 'capture')
+                    for i in range(159)]
+        rekeyed = [dict(row, id='replacement-'+str(i), source='capture')
+                   for i, row in enumerate(baseline[154:])]
+        novel = [source_row('novel-'+str(i), amount=-(i+1001)*100,
+                            merchant='New synthetic shop '+str(i))
+                 for i in range(155)]
+        novel[-1] = dict(novel[-2], id='novel-154')
+        values[0]['transactions'] = copy.deepcopy(baseline[:154] + rekeyed + novel)
+        values[1]['transactions'] = [cloud_row(row) for row in baseline]
+        values[2]['entries'] = [
+            {'legacy_id': row['id'], 'source_at_import': copy.deepcopy(row),
+             'cloud_at_import': cloud_row(row)}
+            for row in baseline
+        ]
+        values[3]['baseline_sha256'] = m.digest(values[2])
+        result = plan(values)
+        self.assertEqual((result['source_count'], result['cloud_count'],
+                          result['baseline_count']), (314, 159, 159))
+        self.assertEqual(result['counts'], {
+            'already_present': 154,
+            'source_missing_preserve': 5,
+            'unlinked_near_duplicate_review': 5,
+            'source_near_duplicate_review': 2,
+            'append_candidate': 153,
+        })
+        self.assertEqual(len(result['decisions']), 319)
+        self.assertFalse(result['apply_authorized'])
+        self.assertEqual(result['write_operations'], [])
+        self.assertEqual(result['delete_operations'], [])
+        # A replacement remains a review even if the original cloud row
+        # was edited after import. Neither direction wins automatically.
+        values[1]['transactions'][154]['merchant'] = 'Cloud user changed shop'
+        self.assertEqual(classify(plan(values), 'replacement-0'),
+                         'historical_baseline_signature_review')
+        self.assertEqual(classify(plan(values), 'old-154'), 'source_missing_preserve')
+        # Deleting the old cloud row is not permission to recreate the same
+        # purchase using its replacement M4 source ID.
+        values[1]['transactions'].pop(154)
+        self.assertEqual(classify(plan(values), 'replacement-0'),
+                         'historical_baseline_signature_review')
+
     def test_zero_amount_is_not_an_append_candidate(self):
         values = fixture(); values[0]['transactions'][1].update(amount=0, kind='unknown')
         self.assertEqual(classify(plan(values),'new'), 'incomplete_source_review')
+
+    def test_rekeyed_purchase_with_one_corrected_field_stays_review_only(self):
+        for field, corrected in (("merchant", "Revised merchant"),
+                                 ("amount", -12000),
+                                 ("date", "2026-10-23")):
+            values = fixture()
+            old = copy.deepcopy(values[0]["transactions"][0])
+            replacement = dict(old, id="new-source-id")
+            replacement[field] = corrected
+            values[0]["transactions"] = [replacement]
+            # User may have renamed or deleted the original cloud row.
+            values[1]["transactions"] = []
+            with self.subTest(changed_field=field):
+                result = plan(values)
+                self.assertEqual(classify(result, "new-source-id"),
+                                 "historical_weak_match_review")
+                self.assertEqual(classify(result, "old"),
+                                 "both_absent_tombstone_preserve")
+                self.assertEqual(result["write_operations"], [])
+
+    def test_confirmed_unknown_and_unpaired_transfer_never_auto_append(self):
+        for kind in ("unknown", "transfer"):
+            values = fixture()
+            values[0]["transactions"][1]["kind"] = kind
+            with self.subTest(kind=kind):
+                self.assertEqual(classify(plan(values), "new"),
+                                 "nonstandard_kind_review")
+        values = fixture()
+        values[0]["transactions"][1].update(amount=5000, kind="refund")
+        self.assertEqual(classify(plan(values), "new"), "append_candidate")
+
+    def test_malformed_cloud_matching_fields_fail_closed(self):
+        for field, malformed in (("currency", None), ("currency", "NTDollars"),
+                                 ("merchant", 123), ("merchant_normalized", {})):
+            values = fixture()
+            values[1]["transactions"][0][field] = malformed
+            with self.subTest(field=field, bad=malformed), self.assertRaises(m.InvalidSnapshot):
+                plan(values)
 
     def test_report_does_not_leak_raw_financial_values_or_mutate_inputs(self):
         values = fixture(); original = copy.deepcopy(values); report = plan(values)

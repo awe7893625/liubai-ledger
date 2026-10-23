@@ -191,6 +191,13 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
     legacy = {}; requests = {}; nearby = defaultdict(list); ambiguous_dates = set()
     for row in dst.values():
         assert_minor(row.get("amount_minor"), nullable=True)
+        if (not isinstance(row.get("currency"), str)
+                or not re.fullmatch(r"[A-Z]{3}", row["currency"].strip())):
+            raise InvalidSnapshot("Invalid cloud currency")
+        if row.get("merchant") is not None and not isinstance(row["merchant"], str):
+            raise InvalidSnapshot("Invalid cloud merchant type")
+        if row.get("merchant_normalized") is not None and not isinstance(row["merchant_normalized"], str):
+            raise InvalidSnapshot("Invalid cloud normalized merchant type")
         uuid(row["id"]); days = cloud_days(row)
         if len(days) > 1:
             ambiguous_dates.add(row["id"])
@@ -201,7 +208,7 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
                 if ident in lookup:
                     raise InvalidSnapshot("Duplicate cloud legacy/request identifier")
                 lookup[ident] = row
-        if row.get("amount_minor") is not None:
+        if row.get("amount_minor") is not None and normalize_name(row.get("merchant")):
             for day in days:
                 nearby[near_key(row, False, day)].append(row)
     account_map = binding.get("account_map"); category_map = binding.get("category_map")
@@ -214,6 +221,10 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
             if old not in a or new not in b:
                 raise InvalidSnapshot("Reference mapping points outside its scoped snapshots")
             uuid(new)
+    historical_nearby = defaultdict(list)
+    historical_weak_by_amount = defaultdict(list)
+    historical_weak_by_merchant = defaultdict(list)
+    historical_weak_by_date = defaultdict(list)
     for old, receipt in prior.items():
         original = receipt.get("source_at_import"); saved = receipt.get("cloud_at_import")
         if not isinstance(original, dict) or not isinstance(saved, dict):
@@ -222,6 +233,24 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
         if original["id"] != old or saved.get("legacy_id") != old or saved.get("user_id") != owner:
             raise InvalidSnapshot("Baseline identity mismatch")
         uuid(saved.get("id"))
+        # The original acknowledged purchase signature outlives later cloud
+        # renames or deletions. A newly keyed M4 receipt must not resurrect
+        # a previously imported or deliberately deleted purchase merely
+        # because the current cloud merchant/date/account was edited.
+        original_merchant = normalize_name(original.get("merchant") or original.get("description"))
+        if original_merchant:
+            historical_nearby[near_key(original, True)].append(saved["id"])
+            if old not in src:
+                # Weaker historical comparisons are review-only and limited
+                # to previously imported IDs absent from the current source.
+                # This catches an email receipt reissued with a new ID and a
+                # corrected merchant, amount, or adjacent purchase date.
+                currency = original["currency"]; day = original["date"]
+                amount = original["amount"]; account = original.get("funding_account_id")
+                historical_weak_by_amount[(currency, day, amount, account)].append(saved["id"])
+                historical_weak_by_merchant[(currency, day, original_merchant, account)].append(saved["id"])
+                historical_weak_by_date[(currency, amount, original_merchant, account)].append(
+                    (date.fromisoformat(day), saved["id"]))
     decisions = []
     new_nearby = defaultdict(list)
     for row in src.values():
@@ -252,6 +281,8 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
             record(ident, classification, ["source." + f for f in source_changed] + ["cloud." + f for f in cloud_changed]); continue
         if row.get("status") != "confirmed" or row["amount"] == 0 or not (row.get("merchant") or row.get("description")):
             record(ident, "incomplete_source_review"); continue
+        if row["kind"] in ("unknown", "transfer"):
+            record(ident, "nonstandard_kind_review"); continue
         old_account = row.get("funding_account_id"); old_category = row.get("category_id")
         if old_account not in account_map or (old_category and old_category not in category_map):
             record(ident, "unmapped_reference_review"); continue
@@ -262,11 +293,26 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
         cloud_id = str(uuid5(NAMESPACE_URL, f"liubai-ledger-m4/{owner}/{ident}"))
         if request_id in requests or cloud_id in dst:
             record(ident, "identity_conflict"); continue
-        candidates = nearby.get(near_key(row, True), [])
+        signature = near_key(row, True)
+        candidates = nearby.get(signature, [])
+        historical = historical_nearby.get(signature, [])
         if candidates:
             classification = "ambiguous_cloud_date_review" if any(r["id"] in ambiguous_dates for r in candidates) else "unlinked_near_duplicate_review"
-            record(ident, classification, candidates=[r["id"] for r in candidates]); continue
-        if len(new_nearby[near_key(row, True)]) > 1:
+            record(ident, classification, candidates=sorted(set([r["id"] for r in candidates] + historical))); continue
+        if historical:
+            record(ident, "historical_baseline_signature_review", candidates=sorted(set(historical))); continue
+        currency = row["currency"]; day = row["date"]
+        account = row.get("funding_account_id"); amount = row["amount"]
+        merchant = normalize_name(row.get("merchant") or row.get("description"))
+        weak_candidates = set(historical_weak_by_amount.get((currency, day, amount, account), []))
+        weak_candidates.update(historical_weak_by_merchant.get((currency, day, merchant, account), []))
+        for old_day, original_cloud_id in historical_weak_by_date.get(
+                (currency, amount, merchant, account), []):
+            if abs((date.fromisoformat(day) - old_day).days) <= 2:
+                weak_candidates.add(original_cloud_id)
+        if weak_candidates:
+            record(ident, "historical_weak_match_review", candidates=sorted(weak_candidates)); continue
+        if len(new_nearby[signature]) > 1:
             record(ident, "source_near_duplicate_review"); continue
         record(ident, "append_candidate")
     for ident in sorted(set(legacy) - set(src)):
