@@ -5,14 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/write-release-metadata.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test:cloud-api": "node --test --test-concurrency=1 tests/api/cloud.test.js tests/api/wallet-ingest.test.js tests/api/transactions.test.js tests/api/account-config.test.js tests/api/shortcut-onboarding.test.js tests/api/budget-handler.test.js tests/api/planning-preferences.test.js tests/api/categories.test.js tests/api/auth-rate-feedback.test.js",
+    "test:ledger-ui": "node --experimental-strip-types --test tests/ui/ledger-data.test.ts tests/ui/budget-data.test.ts tests/ui/explore-data.test.ts tests/ui/ledger-view.test.ts tests/ui/auth-feedback.test.ts tests/ui/transaction-integrity.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "clsx": "^2.0.0",
     "date-fns": "^3.0.0",
+    "google-auth-library": "^10.9.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",

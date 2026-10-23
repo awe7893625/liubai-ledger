@@ -4,6 +4,8 @@ const PublicSite = lazy(() =>
   import("./public-site/PublicSite").then((m) => ({ default: m.PublicSite })),
 );
 const DemoPage = lazy(() => import("./public-site/DemoPage"));
+const CloudConnect = lazy(() => import("./public-site/CloudConnect"));
+const LegalPage = lazy(() => import("./public-site/LegalPage"));
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { App } from "./App";
 import "./styles.css";
@@ -17,6 +19,12 @@ if (container) {
       <Suspense fallback={<p style={{ padding: 32 }}>載入 Ledger…</p>}>
         {window.location.pathname.replace(/\/$/, "") === "/demo" ? (
           <DemoPage />
+        ) : window.location.pathname.replace(/\/$/, "") === "/connect" ? (
+          <CloudConnect />
+        ) : window.location.pathname.replace(/\/$/, "") === "/privacy" ? (
+          <LegalPage kind="privacy" />
+        ) : window.location.pathname.replace(/\/$/, "") === "/terms" ? (
+          <LegalPage kind="terms" />
         ) : (
           <PublicSite />
         )}

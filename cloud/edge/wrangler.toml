@@ -1,0 +1,8 @@
+name = "liubai-ledger-edge"
+main = "worker.js"
+compatibility_date = "2026-10-21"
+workers_dev = false
+
+[[routes]]
+pattern = "app.blankspaces.uk"
+custom_domain = true

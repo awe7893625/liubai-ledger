@@ -11,15 +11,6 @@
       "continue": true
     },
     {
-      "src": "/api(?:/.*)?",
-      "dest": "/not-an-api.json",
-      "status": 404,
-      "headers": {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store"
-      }
-    },
-    {
       "src": "/shortcuts/(.*)\\.shortcut",
       "headers": {
         "Content-Type": "application/octet-stream",
@@ -29,10 +20,44 @@
       "continue": true
     },
     {
+      "src": "/api/v2/preferences",
+      "dest": "/api/v2/bootstrap?resource=preferences"
+    },
+    {
+      "src": "/api/v2/planning",
+      "dest": "/api/v2/bootstrap?resource=planning"
+    },
+    {
+      "src": "/api/v2/budgets",
+      "dest": "/api/v2/bootstrap?resource=budgets"
+    },
+    {
+      "src": "/api/v2/categories",
+      "dest": "/api/v2/bootstrap?resource=categories"
+    },
+    {
+      "src": "/version\\.json",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff"
+      },
+      "continue": true
+    },
+    {
       "handle": "filesystem"
     },
     {
-      "src": "/.*",
+      "src": "/api(?:/.*)?",
+      "dest": "/not-an-api.json",
+      "status": 404,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      }
+    },
+    {
+      "src": "/(?!api(?:/|$)|@vite(?:/|$)|@react-refresh$|@id(?:/|$)|@fs(?:/|$)|src(?:/|$)|node_modules(?:/|$)|assets(?:/|$)).*",
       "dest": "/index.html"
     }
   ]
