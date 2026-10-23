@@ -185,6 +185,20 @@ def build_plan(source: dict, cloud: dict, baseline: dict, binding: dict,
     src_accounts = index(source.get("funding_accounts")); src_categories = index(source.get("categories"))
     dst_accounts = index(cloud.get("accounts")); dst_categories = index(cloud.get("categories"))
     prior = index(baseline.get("entries"), "legacy_id")
+    # M4 can contain records from more than one local Ledger identity. The
+    # source_instance_id labels a machine, not an account. Without an owner
+    # check, a second user's transactions could be proposed for Movie Lin.
+    source_owners = {row.get("user_id") for dataset in (src, src_accounts, src_categories)
+                     for row in dataset.values()}
+    if len(source_owners) != 1 or not all(isinstance(owner_id, str) and owner_id.strip()
+                                          for owner_id in source_owners):
+        raise InvalidSnapshot("M4 source has missing or mixed owner identities")
+    source_owner = next(iter(source_owners))
+    original_owners = {entry.get("source_at_import", {}).get("user_id")
+                       for entry in prior.values()
+                       if isinstance(entry.get("source_at_import"), dict)}
+    if not original_owners or original_owners != {source_owner}:
+        raise InvalidSnapshot("Source owner does not match acknowledged import history")
     for rows in (dst, dst_accounts, dst_categories):
         if any(row.get("user_id") != owner for row in rows.values()):
             raise InvalidSnapshot("Snapshot contains a foreign tenant row")

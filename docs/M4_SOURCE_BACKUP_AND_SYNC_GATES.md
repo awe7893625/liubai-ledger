@@ -93,6 +93,16 @@ category, normalized-merchant, description and note fields nevertheless
 differ across the 154 shared rows. Never overwrite those differences
 by rerunning the initial importer.
 
+A later **read-only** M4 query at 2026-10-24 01:37 Asia/Taipei showed **315**
+source transactions, with October 23 still the latest recorded purchase day.
+This query did not create a new verified backup or prove any new cloud rows.
+Its source `transactions`, `funding_accounts` and `categories` each contained
+exactly one nonempty `user_id`, and all three owners were equal. The offline
+source adapter and reconciliation planner now fail closed on missing, mixed
+or baseline-inconsistent local owners; the supported M4 schema satisfies this
+contract as observed. This extra one-row observation does not make the older
+314-row archive a fresh snapshot.
+
 This makes **314 − 159 = 155** merely a net row-count difference. There
 are 160 current source IDs absent from the old export; five of those
 match prior purchase signatures and two are in one source-side

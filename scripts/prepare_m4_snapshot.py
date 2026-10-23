@@ -82,9 +82,12 @@ def prepare(archive: Path, manifest: Path, instance: str) -> dict:
         months[month] = months.get(month, 0) + 1
     if [[month, months[month]] for month in sorted(months)] != info.get("monthly_counts"):
         raise ValueError("Backup month totals differ from receipt")
-    owners = {row.get("user_id") for row in tables["transactions"]}
+    # Check ALL financial reference tables, not only transactions. A populated
+    # second owner's account/category would otherwise be silently bundled into
+    # the snapshot and potentially mapped to the cloud target.
+    owners = {row.get("user_id") for table in tables.values() for row in table}
     if len(owners) != 1 or not all(isinstance(value, str) and value.strip() for value in owners):
-        raise ValueError("Expected a single, nonempty local M4 owner")
+        raise ValueError("Expected a single, consistent, nonempty local M4 owner across all tables")
     snapshot = {"schema": SCHEMA, "source_instance_id": instance,
                 "captured_at": instant.isoformat(), **tables}
     return snapshot

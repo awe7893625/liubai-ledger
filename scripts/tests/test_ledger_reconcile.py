@@ -20,7 +20,7 @@ PROJECT = "p" * 20
 
 
 def source_row(ident="old", **patch):
-    return {"id": ident, "amount": -12345, "currency": "TWD", "date": "2026-10-22",
+    return {"id": ident, "user_id": "m4-owner-fixture", "amount": -12345, "currency": "TWD", "date": "2026-10-22",
             "merchant": "PRIVATE MERCHANT " + ident, "description": None,
             "merchant_normalized": "private merchant " + ident,
             "funding_account_id": "legacy-account", "category_id": "legacy-category",
@@ -46,8 +46,8 @@ def fixture():
     old = source_row(); row = cloud_row(old)
     source = {"schema": m.SCHEMA, "source_instance_id": "m4-primary", "captured_at": NOW.isoformat(),
               "transactions": [old, source_row("new", amount=-32100)],
-              "funding_accounts": [{"id": "legacy-account", "nickname": "Original Card", "currency": "TWD"}],
-              "categories": [{"id": "legacy-category", "name": "Original Food"}]}
+              "funding_accounts": [{"id": "legacy-account", "user_id": "m4-owner-fixture", "nickname": "Original Card", "currency": "TWD"}],
+              "categories": [{"id": "legacy-category", "user_id": "m4-owner-fixture", "name": "Original Food"}]}
     cloud = {"schema": m.SCHEMA, "target_user_id": OWNER, "target_project_ref": PROJECT,
              "captured_at": NOW.isoformat(), "transactions": [row],
              "accounts": [{"id": ACCOUNT, "user_id": OWNER, "name": "User Renamed Card", "currency": "TWD"}],
@@ -147,7 +147,7 @@ class ReconciliationTests(unittest.TestCase):
     def test_duplicate_account_names_do_not_drive_mapping(self):
         values = fixture(); values[0]["funding_accounts"][0]["nickname"] = "Other same-named card"
         self.assertEqual(classify(plan(values), "new"), "append_candidate")
-        values[0]["funding_accounts"].append({"id": "second", "nickname": "Other same-named card", "currency": "TWD"})
+        values[0]["funding_accounts"].append({"id": "second", "user_id": "m4-owner-fixture", "nickname": "Other same-named card", "currency": "TWD"})
         values[3]["account_map"]["second"] = ACCOUNT
         with self.assertRaises(m.InvalidSnapshot): plan(values)
 
@@ -350,6 +350,35 @@ class ReconciliationTests(unittest.TestCase):
             values[1]["transactions"][0][field] = malformed
             with self.subTest(field=field, bad=malformed), self.assertRaises(m.InvalidSnapshot):
                 plan(values)
+
+    def test_mixed_local_owner_records_fail_closed(self):
+        for table in ("transactions", "funding_accounts", "categories"):
+            values = fixture()
+            values[0][table][0]["user_id"] = "other-m4-ledger-owner"
+            with self.subTest(table=table), self.assertRaisesRegex(m.InvalidSnapshot, "owner"):
+                plan(values)
+
+    def test_owner_missing_in_one_source_reference_fails_closed(self):
+        for table in ("transactions", "funding_accounts", "categories"):
+            values = fixture()
+            values[0][table][0].pop("user_id")
+            with self.subTest(table=table), self.assertRaisesRegex(m.InvalidSnapshot, "owner"):
+                plan(values)
+
+    def test_empty_acknowledged_baseline_rejected_even_with_matching_digest(self):
+        values = fixture()
+        values[2]["entries"] = []
+        values[3]["baseline_sha256"] = m.digest(values[2])
+        with self.assertRaisesRegex(m.InvalidSnapshot, "acknowledged import"):
+            plan(values)
+
+    def test_source_owner_rekey_does_not_switch_import_target(self):
+        values = fixture()
+        for table in ("transactions", "funding_accounts", "categories"):
+            for row in values[0][table]:
+                row["user_id"] = "reassigned-ledger-owner"
+        with self.assertRaisesRegex(m.InvalidSnapshot, "acknowledged import"):
+            plan(values)
 
     def test_report_does_not_leak_raw_financial_values_or_mutate_inputs(self):
         values = fixture(); original = copy.deepcopy(values); report = plan(values)

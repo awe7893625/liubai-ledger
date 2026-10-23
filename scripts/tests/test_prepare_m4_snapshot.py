@@ -23,10 +23,10 @@ def fixture(path: Path):
               date text, merchant text, description text, merchant_normalized text,
               funding_account_id text, category_id text, notes text, kind text,
               status text, source text, is_recurring integer, user_id text);
-            create table funding_accounts(id text primary key, nickname text, currency text);
-            create table categories(id text primary key, slug text, name text);
-            insert into funding_accounts values('a', 'Private Visa', 'TWD');
-            insert into categories values('c', 'food', 'Food');
+            create table funding_accounts(id text primary key, nickname text, currency text, user_id text);
+            create table categories(id text primary key, slug text, name text, user_id text);
+            insert into funding_accounts values('a', 'Private Visa', 'TWD', 'local-owner');
+            insert into categories values('c', 'food', 'Food', 'local-owner');
             insert into transactions values
               ('t1', -12345, 'TWD', '2026-10-22', 'Cafe', null, 'cafe',
                 'a', 'c', 'Private note', 'expense', 'confirmed', 'capture', 0, 'local-owner');
@@ -116,14 +116,19 @@ class SourceAdapterTests(unittest.TestCase):
         self.assertFalse(forbidden.exists())
 
     def test_multiple_local_owners_are_rejected(self):
-        with sqlite3.connect(self.source) as db:
-            db.execute("update transactions set user_id='other-user' where id='t2'")
-        new = backup.backup(self.source, self.backups, write=True,
-                            clock=self.clock + dt.timedelta(seconds=1))
-        new_archive = Path(new["archive"])
-        new_manifest = Path(str(new_archive).replace(".sql.gz", ".manifest.json"))
-        with self.assertRaises(ValueError):
-            adapter.prepare(new_archive, new_manifest, "m4-primary")
+        for number, table in enumerate(("transactions", "funding_accounts", "categories"), start=1):
+            with sqlite3.connect(self.source) as db:
+                db.execute(f"update {table} set user_id='other-user' where id=?",
+                           ({"transactions": "t2", "funding_accounts": "a", "categories": "c"}[table],))
+            new = backup.backup(self.source, self.backups, write=True,
+                                clock=self.clock + dt.timedelta(seconds=number))
+            new_archive = Path(new["archive"])
+            new_manifest = Path(str(new_archive).replace(".sql.gz", ".manifest.json"))
+            with self.subTest(table=table), self.assertRaisesRegex(ValueError, "owner"):
+                adapter.prepare(new_archive, new_manifest, "m4-primary")
+            with sqlite3.connect(self.source) as db:
+                db.execute(f"update {table} set user_id='local-owner' where id=?",
+                           ({"transactions": "t2", "funding_accounts": "a", "categories": "c"}[table],))
 
 
 if __name__ == "__main__":
