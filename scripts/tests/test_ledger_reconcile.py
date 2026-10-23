@@ -316,6 +316,22 @@ class ReconciliationTests(unittest.TestCase):
                                  "both_absent_tombstone_preserve")
                 self.assertEqual(result["write_operations"], [])
 
+    def test_multiple_corrected_signature_fields_cannot_be_auto_authorized(self):
+        values = fixture()
+        old = copy.deepcopy(values[0]["transactions"][0])
+        replacement = dict(old, id="new-id", amount=-9999,
+                           merchant="Changed name", merchant_normalized="changed name")
+        values[0]["transactions"] = [replacement]
+        values[1]["transactions"] = []
+        result = plan(values)
+        # Without an immutable issuer reference this case is fundamentally
+        # ambiguous. An append candidate is not an execution instruction.
+        self.assertEqual(classify(result, "new-id"), "append_candidate")
+        self.assertFalse(result["apply_authorized"])
+        self.assertTrue(result["requires_new_read_and_host_authorization"])
+        self.assertEqual(result["write_operations"], [])
+        self.assertEqual(result["delete_operations"], [])
+
     def test_confirmed_unknown_and_unpaired_transfer_never_auto_append(self):
         for kind in ("unknown", "transfer"):
             values = fixture()

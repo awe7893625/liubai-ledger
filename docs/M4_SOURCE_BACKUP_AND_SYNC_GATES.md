@@ -106,9 +106,13 @@ The offline planner now checks both acknowledged historical and current
 cloud signatures and conservatively marks exact or weak historical
 matches for review, even after a cloud merchant edit or deletion.
 Confirmed `unknown`/unpaired `transfer` source kinds require explicit
-review; malformed cloud currency/merchant types fail closed. **All
-append_candidate decisions remain review-only and are never automatically
-executed.**
+review; malformed cloud currency/merchant types fail closed. If a
+replacement source changes **two or more signature fields** (for example,
+both merchant and amount), no deterministic match is guaranteed without
+a stable issuer reference. Even an `append_candidate` may then be a
+duplicate and must be individually reviewed against the live cloud
+ledger and original receipts. **All append_candidate decisions are
+review-only and never automatically executed.**
 
 ## Do not confuse counts with insertions
 

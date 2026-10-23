@@ -146,3 +146,43 @@ bash scripts/release_public_beta.sh --check
 
 This task closes reviewed code risks and makes reconciliation inspectable. It
 DOES NOT close the two production-operation blockers or claim full SaaS parity.
+
+## Addendum — current M4 source backup and re-keyed receipts (Oct 23)
+
+A private on-host SQLite archive captured at 21:09 Taiwan time was restored
+and verified to contain **314 records** with the newest date October 23.
+An independent source-only comparison against the original 159-row import
+found 154 identical ID memberships, five original IDs no longer present,
+and 160 M4 source IDs absent from the original export. Five newly keyed
+records have the same date/amount/currency/normalized-merchant signature
+as old records; four are recorded through capture and one through email.
+There is also one pair of source-new records with matching same-day
+purchase characteristics. All of this is **aggregate-only, read-only
+source evidence**, not a fresh cloud comparison or a migration receipt.
+
+The six existing M4 account IDs and 11 category IDs are stable across
+the old and current source, with matching normalized descriptors/slugs.
+Some per-transaction account/category/note assignments nevertheless differ.
+The current cloud append list remains unknown, and the blocked read-only
+cloud comparison has not been retried through another tool or connector.
+
+Further offline planner hardening prevents changed/deleted cloud merchants
+from hiding matches to acknowledged historical purchases. Corrections
+of a single signature dimension (amount, merchant or adjacent date)
+trigger conservative historical review. Confirmed transfer/unknown types
+require explicit review, and malformed cloud matching fields fail closed.
+If *multiple* signature dimensions change, a near duplicate may still
+be labeled append_candidate; this is **never an executable write** and
+must be manually reconciled against the current authorized cloud snapshot
+and original purchase evidence. Increasing fallback matching to only
+account/day was deliberately rejected because it overflags legitimate
+separate purchases. Source-only hashed-ID and signature comparisons did
+not export raw financial descriptions.
+
+Latest local checks after this addendum: 50 Python/offline tests,
+57 API tests, 34 frontend presentation tests and 16 network-isolated
+PostgreSQL assertions; source and frontend check-only release command
+passed. Codex Luna completed a subsequent independent read-only review;
+its medium-severity observation about multiple corrected fields is
+documented as this explicit remaining limitation. **No hosted migration,
+production deployment or cloud import occurred in this update.**
