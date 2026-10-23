@@ -37,7 +37,7 @@ with sync_playwright() as pw:
       item=next(row for row in state['cats'] if row['id']==body['id']);item['name']=body['name']
      respond({'ok':True,'category':item},201 if method=='POST' else 200);return
     if path.startswith('/rest/v1/ledger_transactions'):
-     rows=sorted(state['rows'],key=lambda row:row['occurred_at'],reverse=True);respond(rows,headers={'Content-Range':f'0-{len(rows)-1}/{len(rows)}'});return
+     rows=sorted(state['rows'],key=lambda row:row['occurred_at'],reverse=True);respond(rows,headers={'Content-Range':f'0-{len(rows)-1}/{len(rows)}' if rows else '*/0'});return
     if path=='/api/v2/transactions':
      body=route.request.post_data_json
      if method=='POST':
@@ -72,6 +72,19 @@ with sync_playwright() as pw:
    latest=page.get_by_role('heading',name='最新紀錄',exact=True).bounding_box()
    onboarding=page.locator('.ls-shortcut-banner').first.bounding_box()
    assert latest and onboarding and latest['y'] < onboarding['y'], 'Onboarding pushes transactions below the ledger'
+   if width==390 and engine=='webkit':
+    populated=state['rows'];state['rows']=[]
+    page.reload(wait_until='networkidle')
+    page.get_by_role('heading',name='我的帳本',exact=True).wait_for()
+    page.locator('.ls-load-state',has_text='正在同步帳本').wait_for(state='hidden')
+    empty_banner=page.locator('.ls-shortcut-banner').first.bounding_box()
+    period=page.locator('.ls-ledger-period').first.bounding_box()
+    assert empty_banner and period and empty_banner['y'] < period['y'], 'Empty-ledger shortcut setup is not discoverable'
+    page.screenshot(path=str(OUT/'home-empty-webkit-390.png'))
+    state['rows']=populated
+    page.reload(wait_until='networkidle')
+    page.get_by_role('heading',name='我的帳本',exact=True).wait_for()
+    page.locator('.ls-load-state',has_text='正在同步帳本').wait_for(state='hidden')
    page.locator('.lf-freshness summary').click();page.get_by_text('重新整理只讀取目前雲端帳本',exact=False).wait_for()
    checks.append({'name':f'{engine}-{width} home viewport reserves header/nav and distinguishes data freshness','status':'PASS'})
    go('記一筆')

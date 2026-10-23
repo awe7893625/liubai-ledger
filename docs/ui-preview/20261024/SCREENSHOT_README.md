@@ -2,6 +2,8 @@
 
 Screenshots are **real rendered application output in an isolated Playwright test**, using synthetic ledger fixtures. No personal transactions, real login credentials or production accounts are included. The WebKit captures approximate the Safari rendering engine at 390×844; they are **not screenshots from a physical iPhone**.
 
+File `00` is a REAL publicly deployed login page in headless WebKit, unauthenticated, no financial/private data. File `11` shows the empty-ledger onboarding priority using mocked fixture data.
+
 Files `01–09` cover homepage, manual entry, save button, transactions, explore, general settings, accounts/categories and iPhone manual-first workflow. `10` is the 1280px Chromium desktop homepage.
 
 Public-account signup, current M4 private-data synchronization, Supabase pending migrations and native Apple Pay tap compatibility are **not proven** by these screenshots.
